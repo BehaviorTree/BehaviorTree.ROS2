@@ -1,5 +1,4 @@
 #include <behaviortree_ros2/bt_action_node.hpp>
-#include <behaviortree_ros2/nav2_action.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/executors.hpp>
 
@@ -37,10 +36,11 @@ public:
 class SleepAction: public RosActionNode<behaviortree_ros2::action::Sleep>
 {
 public:
-  SleepAction(const ActionNodeParams& params,
-              const std::string& name,
-              const BT::NodeConfiguration& conf)
-    : RosActionNode<behaviortree_ros2::action::Sleep>(params, name, conf)
+  SleepAction(const std::string& name,
+              const BT::NodeConfiguration& conf,
+              const ActionNodeParams& params,
+              typename std::shared_ptr<ActionClient> action_client)
+    : RosActionNode<behaviortree_ros2::action::Sleep>(name, conf, params, action_client)
   {}
 
   static BT::PortsList providedPorts()
@@ -106,13 +106,8 @@ int main(int argc, char **argv)
 
   NodeStatus status = NodeStatus::IDLE;
 
-//  rclcpp::executors::SingleThreadedExecutor executor;
-//  executor.add_node(nh);
-
   while( rclcpp::ok() )
   {
-//    executor.spin_some(std::chrono::milliseconds(10));
-//    rclcpp::spin_some(nh);
     status = tree.tickRoot();
     tree.sleep(std::chrono::milliseconds(100));
   }

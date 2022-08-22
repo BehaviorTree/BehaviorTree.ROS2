@@ -1,5 +1,5 @@
-#ifndef BEHAVIOR_TREE__BT_ACTION_NODE_HPP_
-#define BEHAVIOR_TREE__BT_ACTION_NODE_HPP_
+#ifndef BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
+#define BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
 
 #include <memory>
 #include <string>
@@ -53,16 +53,19 @@ public:
    * To register this class into the factory, use:
    *
    *    RegisterRosAction<DerivedClasss>(factory, params)
+   *
+   * Note that if the external_action_client is not set, the constructor will build its own.
    * */
-  RosActionNode(const ActionNodeParams& params,
-                const std::string & instance_name,
-                const BT::NodeConfiguration& conf);
+  explicit RosActionNode(const std::string & instance_name,
+                         const BT::NodeConfiguration& conf,
+                         const ActionNodeParams& params,
+                         typename std::shared_ptr<ActionClient> external_action_client = {});
 
   virtual ~RosActionNode() = default;
 
   NodeStatus tick() override final;
 
-  /// The default halt() implemnetation will call cancelGoal is necessary.
+  /// The default halt() implementation will call cancelGoal is necessary.
   void halt() override;
 
   /** setGoal is a callback invoked to return the goal message (ActionT::Goal).
@@ -121,11 +124,12 @@ private:
 template <class DerivedT> static
   void RegisterRosAction(BT::BehaviorTreeFactory& factory,
                     const std::string& registration_ID,
-                    const ActionNodeParams& params)
+                    const ActionNodeParams& params,
+                    std::shared_ptr<typename DerivedT::ActionClient> external_client = {} )
 {
-  NodeBuilder builder = [params](const std::string& name, const NodeConfiguration& config)
+  NodeBuilder builder = [=](const std::string& name, const NodeConfiguration& config)
   {
-    return std::make_unique<DerivedT>(params, name, config);
+    return std::make_unique<DerivedT>(name, config, params, external_client);
   };
 
   TreeNodeManifest manifest;
@@ -142,22 +146,30 @@ template <class DerivedT> static
 //----------------------------------------------------------------
 
 template<class T> inline
-  RosActionNode<T>::RosActionNode(const Params& params,
-                                  const std::string &name,
-                                  const BT::NodeConfiguration &conf):
-  BT::ActionNodeBase(name, conf),
+  RosActionNode<T>::RosActionNode(const std::string & instance_name,
+                                  const BT::NodeConfiguration& conf,
+                                  const ActionNodeParams& params,
+                                  typename std::shared_ptr<ActionClient> external_action_client):
+  BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
   action_name_(params.action_name),
   server_timeout_(params.server_timeout)
 {
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
-
-  bool found = action_client_->wait_for_action_server(server_timeout_);
-  if(!found)
+  if( external_action_client )
   {
-    RCLCPP_ERROR(node_->get_logger(),
-                 "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
+    action_client_ = external_action_client;
+  }
+  else
+  {
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
+
+    bool found = action_client_->wait_for_action_server(server_timeout_);
+    if(!found)
+    {
+      RCLCPP_ERROR(node_->get_logger(),
+                   "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
+    }
   }
 }
 
@@ -319,4 +331,4 @@ template<class T> inline
 
 }  // namespace BT
 
-#endif  // BEHAVIOR_TREE__BT_ACTION_NODE_HPP_
+#endif  // BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_

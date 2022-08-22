@@ -1,0 +1,8 @@
+#goal definition
+int32 msec_timeout
+---
+#result definition
+bool done
+---
+#feedback
+int32 cycle

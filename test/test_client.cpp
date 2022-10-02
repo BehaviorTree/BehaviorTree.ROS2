@@ -3,6 +3,9 @@
 #include <rclcpp/executors.hpp>
 
 #include "behaviortree_ros2/action/sleep.hpp"
+#include "behaviortree_cpp_v3/loggers/bt_zmq_publisher.h"
+// #include <behaviortree_ros2/bt_service_node.hpp>
+
 
 using namespace BT;
 
@@ -94,6 +97,7 @@ int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
   auto nh = std::make_shared<rclcpp::Node>("sleep_client");
+  
 
   BehaviorTreeFactory factory;
 
@@ -103,6 +107,9 @@ int main(int argc, char **argv)
   RegisterRosAction<SleepAction>(factory, "Sleep", params);
 
   auto tree = factory.createTreeFromText(xml_text);
+
+  // This logger publish status changes using ZeroMQ. Used by Groot
+  PublisherZMQ publisher_zmq(tree);
 
   NodeStatus status = NodeStatus::IDLE;
 

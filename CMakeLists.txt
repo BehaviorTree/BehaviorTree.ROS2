@@ -18,6 +18,7 @@ find_package(rclcpp REQUIRED )
 find_package(rclcpp_action REQUIRED )
 find_package(behaviortree_cpp_v3 REQUIRED )
 find_package(ament_index_cpp REQUIRED)
+find_package(example_interfaces REQUIRED)
 
 find_package(rosidl_default_generators REQUIRED)
 
@@ -36,6 +37,7 @@ target_include_directories(sleep_server PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(sleep_server
+  example_interfaces
   ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
 rosidl_target_interfaces(sleep_server ${PROJECT_NAME} "rosidl_typesupport_cpp")
@@ -46,10 +48,21 @@ target_include_directories(test_client PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(test_client
+  example_interfaces
   ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
 rosidl_target_interfaces(test_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+
+# add_executable(test_service_client test/test_service_client.cpp)
+# target_include_directories(test_service_client PRIVATE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# ament_target_dependencies(test_service_client
+#   example_interfaces
+#   ${THIS_PACKAGE_INCLUDE_DEPENDS}
+# )
+# rosidl_target_interfaces(test_service_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 #add_executable(test_server test/test_server.cpp)
 #add_dependencies(test_server ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
@@ -61,6 +74,7 @@ rosidl_target_interfaces(test_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 install(TARGETS
   sleep_server
   test_client
+  # test_service_client
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

@@ -19,6 +19,8 @@ find_package(rclcpp_action REQUIRED )
 find_package(behaviortree_cpp_v3 REQUIRED )
 find_package(ament_index_cpp REQUIRED)
 find_package(example_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 
 find_package(rosidl_default_generators REQUIRED)
 
@@ -52,6 +54,20 @@ ament_target_dependencies(test_client
   ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
 rosidl_target_interfaces(test_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+
+add_executable(nav2_client test/nav2_client.cpp)
+target_include_directories(nav2_client PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(nav2_client
+  nav2_msgs
+  geometry_msgs
+  example_interfaces
+  rclcpp_action
+  ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+rosidl_target_interfaces(nav2_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
 # add_executable(test_service_client test/test_service_client.cpp)

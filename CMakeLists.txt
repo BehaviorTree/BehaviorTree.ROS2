@@ -70,6 +70,10 @@ ament_target_dependencies(nav2_client
 rosidl_target_interfaces(nav2_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
+install(TARGETS
+  nav2_client
+  DESTINATION lib/${PROJECT_NAME})
+
 # add_executable(test_service_client test/test_service_client.cpp)
 # target_include_directories(test_service_client PRIVATE
 #   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

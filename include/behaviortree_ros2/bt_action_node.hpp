@@ -178,7 +178,7 @@ template<class T> inline
 {
   auto CheckStatus = [](NodeStatus status)
   {
-    if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
+    if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE  )
     {
       throw std::logic_error("RosActionNode: the callback must return either SUCCESS of FAILURE");
     }
@@ -212,7 +212,7 @@ template<class T> inline
       on_feedback_state_change_ = onFeeback(feedback);
       if( on_feedback_state_change_ == NodeStatus::IDLE)
       {
-        throw std::logic_error("onFeeback must not retunr IDLE");
+        throw std::logic_error("onFeeback must not return IDLE");
       }
       emitStateChanged();
     };

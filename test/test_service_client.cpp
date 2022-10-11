@@ -48,34 +48,37 @@ public:
   static PortsList providedPorts()
   {
     return  {
+      InputPort<unsigned>("msec"),
       InputPort<int>("first_int"),
       InputPort<int>("second_int"),
       OutputPort<int>("sum") };
   }
 
-  void sendRequest(Request& request) override
+  void sendRequest(typename ServiceType::Request::SharedPtr request) override
   {
-    getInput("first_int", request.a);
-    getInput("second_int", request.b);
-    expected_result_ = request.a + request.b;
+
+    getInput("first_int", request->a);
+    
+    getInput("second_int", request->b);
+    expected_result_ = request->a + request->b;
     RCLCPP_INFO(node_->get_logger(),"AddTwoInts: sending request");
   }
 
-  NodeStatus onResponse(const Response& rep) override
+  NodeStatus onResponse(const ResponseType& rep) override
   {
     RCLCPP_INFO(node_->get_logger(),"AddTwoInts: response received");
-    if( rep.sum == expected_result_)
+    if( rep->sum == expected_result_)
     {
-      setOutput<int>("sum", rep.sum);
+      setOutput<int>("sum", rep->sum);
       return NodeStatus::SUCCESS;
     }
     else{
-      RCLCPP_ERROR(node_->get_logger(),"AddTwoInts replied something unexpected: %d", rep.sum);
+      RCLCPP_ERROR(node_->get_logger(),"AddTwoInts replied something unexpected: %d", rep->sum);
       return NodeStatus::FAILURE;
     }
   }
 
-  virtual NodeStatus onFailedRequest(RosServiceNode::FailureCause failure) override
+  virtual NodeStatus onFailedRequest(ServiceNodeErrorCode failure) override
   {
     RCLCPP_ERROR(node_->get_logger(),"AddTwoInts request failed %d", static_cast<int>(failure));
     return NodeStatus::FAILURE;
@@ -96,11 +99,11 @@ private:
      <BehaviorTree>
         <Sequence>
             <PrintValue message="start"/>
-            <Sleep msec="2000"/>
+            <Sleep first_int='1' second_int='2' msec="2000"/>
             <PrintValue message="sleep completed"/>
             <Fallback>
                 <Timeout msec="500">
-                   <Sleep msec="1000"/>
+                   <Sleep first_int='15' second_int='12' msec="1000"/>
                 </Timeout>
                 <PrintValue message="sleep aborted"/>
             </Fallback>
@@ -119,7 +122,7 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-  ServiceNodeParams params = {nh, "sleep_service", std::chrono::milliseconds(2000)};
+  ServiceNodeParams params = {nh, "add_two_ints", std::chrono::milliseconds(10000)};
   RegisterRosService<SleepService>(factory, "Sleep", params);
 
   auto tree = factory.createTreeFromText(xml_text);

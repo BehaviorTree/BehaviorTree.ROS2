@@ -1,4 +1,5 @@
 #include <behaviortree_ros2/bt_action_node.hpp>
+#include <behaviortree_ros2/bt_service_node.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/executors.hpp>
 
@@ -67,7 +68,7 @@ public:
     getInput<double>("yaw",yaw);
     
     geometry_msgs::msg::PoseStamped goal_pose_;
-    goal_pose_.header.frame_id = "/map";
+    goal_pose_.header.frame_id = "map";
     goal_pose_.pose.position.x = x;
     goal_pose_.pose.position.y = y;
     goal_pose_.pose.position.z = 0.0;
@@ -102,10 +103,11 @@ public:
      <BehaviorTree>
         <Sequence>
             <PrintValue message="start"/>
-            <Fallback>
-                <SendGoalAction x="0" y="0" yaw="0"/>
-                <PrintValue message="Goal aborted"/>
-            </Fallback>
+            <SequenceStar>
+                <SendGoalAction x="-0.2" y="0.12" yaw="0"/>
+                <SendGoalAction x="-4.19" y="7.26" yaw="0"/>
+                <SendGoalAction x="6.86" y="-4.23" yaw="0"/>
+            </SequenceStar>
             <PrintValue message="Goal completed"/>
         </Sequence>
      </BehaviorTree>
@@ -122,20 +124,28 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-  ActionNodeParams params = {nh, "navigate_to_pose", std::chrono::milliseconds(2000)};
+  ActionNodeParams params = {nh, "navigate_to_pose", std::chrono::milliseconds(300000)};
   RegisterRosAction<SendGoalAction>(factory, "SendGoalAction", params);
 
   auto tree = factory.createTreeFromText(xml_text);
 
   // This logger publish status changes using ZeroMQ. Used by Groot
-  PublisherZMQ publisher_zmq(tree);
+  PublisherZMQ publisher_zmq(tree, 25,1670,1671);
 
   NodeStatus status = NodeStatus::IDLE;
 
   while( rclcpp::ok() )
   {
     status = tree.tickRoot();
-    tree.sleep(std::chrono::milliseconds(100));
+    
+    if(status==NodeStatus::SUCCESS)
+    {
+    tree.sleep(std::chrono::milliseconds(10000));
+    }
+    else
+    {
+      tree.sleep(std::chrono::milliseconds(100));
+    }
   }
 
   return 0;

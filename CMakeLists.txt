@@ -70,19 +70,15 @@ ament_target_dependencies(nav2_client
 rosidl_target_interfaces(nav2_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
-install(TARGETS
-  nav2_client
-  DESTINATION lib/${PROJECT_NAME})
-
-# add_executable(test_service_client test/test_service_client.cpp)
-# target_include_directories(test_service_client PRIVATE
-#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#   $<INSTALL_INTERFACE:include>)
-# ament_target_dependencies(test_service_client
-#   example_interfaces
-#   ${THIS_PACKAGE_INCLUDE_DEPENDS}
-# )
-# rosidl_target_interfaces(test_service_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
+add_executable(test_service_client test/test_service_client.cpp)
+target_include_directories(test_service_client PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(test_service_client
+  example_interfaces
+  ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+rosidl_target_interfaces(test_service_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 #add_executable(test_server test/test_server.cpp)
 #add_dependencies(test_server ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
@@ -94,10 +90,8 @@ install(TARGETS
 install(TARGETS
   sleep_server
   test_client
-  # test_service_client
-  RUNTIME DESTINATION bin
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
+  test_service_client
+  DESTINATION lib/${PROJECT_NAME}
   )
 
 install(

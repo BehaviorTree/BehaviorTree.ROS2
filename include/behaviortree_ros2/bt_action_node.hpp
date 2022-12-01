@@ -304,7 +304,7 @@ public:
       }
     }
 
-    setStatus(NodeStatus::IDLE);
+    resetStatus();
   }
 
 protected:

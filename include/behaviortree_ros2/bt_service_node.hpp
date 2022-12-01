@@ -136,7 +136,7 @@ public:
   void halt() override
   {
     request_sent_ = false;
-    setStatus(NodeStatus::IDLE);
+    resetStatus();
   }
 
   /**

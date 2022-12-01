@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
-#define BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
+#ifndef BEHAVIOR_TREE_ROS2__BT_SERVICE_NODE_HPP_
+#define BEHAVIOR_TREE_ROS2__BT_SERVICE_NODE_HPP_
 
 #include <string>
 #include <memory>
@@ -236,6 +236,26 @@ protected:
   rclcpp::Time sent_time_;
 };
 
+/// Method to register the bt action into a factory.
+// template <class DerivedT> static
+// void register_bt_action(BT::BehaviorTreeFactory& factory,
+//     const std::string& registration_ID,
+//     const std::string& action_name)
+// {
+//   NodeBuilder builder = [=](const std::string& name, const NodeConfig& config)
+//   {
+//     return std::make_unique<DerivedT>(name, action_name, config);
+//   };
+
+//   TreeNodeManifest manifest;
+//   manifest.type = getType<DerivedT>();
+//   manifest.ports = DerivedT::providedPorts();
+//   manifest.registration_ID = registration_ID;
+//   const auto& basic_ports = DerivedT::providedPorts();
+//   manifest.ports.insert(basic_ports.begin(), basic_ports.end());
+//   factory.registerBuilder(manifest, builder);
+// }
+
 }  // namespace BT
 
-#endif  // BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
+#endif  // BEHAVIOR_TREE_ROS2__BT_SERVICE_NODE_HPP_

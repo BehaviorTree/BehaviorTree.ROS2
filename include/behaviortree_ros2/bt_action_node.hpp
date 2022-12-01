@@ -21,6 +21,7 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 
 #include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_ros2/bt_conversions.hpp"
 
 namespace BT
@@ -447,6 +448,26 @@ protected:
   future_goal_handle_;
   rclcpp::Time time_goal_sent_;
 };
+
+/// Method to register the bt action into a factory.
+template <class DerivedT> static
+  void register_bt_action(BehaviorTreeFactory& factory,
+    const std::string& registration_ID,
+    const std::string& action_name)
+{
+  NodeBuilder builder = [=](const std::string& name, const NodeConfig& config)
+  {
+    return std::make_unique<DerivedT>(name, action_name, config);
+  };
+
+  TreeNodeManifest manifest;
+  manifest.type = getType<DerivedT>();
+  manifest.ports = DerivedT::providedPorts();
+  manifest.registration_ID = registration_ID;
+  const auto& basic_ports = DerivedT::providedPorts();
+  manifest.ports.insert(basic_ports.begin(), basic_ports.end());
+  factory.registerBuilder(manifest, builder);
+}
 
 }  // namespace BT
 

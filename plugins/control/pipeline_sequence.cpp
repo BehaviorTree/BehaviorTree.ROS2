@@ -22,31 +22,31 @@ namespace BT
 {
 
 PipelineSequence::PipelineSequence(const std::string & name)
-: BT::ControlNode(name, {})
+: ControlNode(name, {})
 {
 }
 
 PipelineSequence::PipelineSequence(
   const std::string & name,
-  const BT::NodeConfig & config)
-: BT::ControlNode(name, config)
+  const NodeConfig & config)
+: ControlNode(name, config)
 {
 }
 
-BT::NodeStatus PipelineSequence::tick()
+NodeStatus PipelineSequence::tick()
 {
   for (std::size_t i = 0; i < children_nodes_.size(); ++i) {
     auto status = children_nodes_[i]->executeTick();
     switch (status) {
-      case BT::NodeStatus::FAILURE:
+      case NodeStatus::FAILURE:
         ControlNode::haltChildren();
         last_child_ticked_ = 0;  // reset
         return status;
-      case BT::NodeStatus::SUCCESS:
+      case NodeStatus::SUCCESS:
         // do nothing and continue on to the next child. If it is the last child
         // we'll exit the loop and hit the wrap-up code at the end of the method.
         break;
-      case BT::NodeStatus::RUNNING:
+      case NodeStatus::RUNNING:
         if (i >= last_child_ticked_) {
           last_child_ticked_ = i;
           return status;
@@ -63,12 +63,12 @@ BT::NodeStatus PipelineSequence::tick()
   // Wrap up.
   ControlNode::haltChildren();
   last_child_ticked_ = 0;  // reset
-  return BT::NodeStatus::SUCCESS;
+  return NodeStatus::SUCCESS;
 }
 
 void PipelineSequence::halt()
 {
-  BT::ControlNode::halt();
+  ControlNode::halt();
   last_child_ticked_ = 0;
 }
 
@@ -76,5 +76,5 @@ void PipelineSequence::halt()
 
 BT_REGISTER_NODES(factory)
 {
-  factory.registerNodeType<nav2_behavior_tree::PipelineSequence>("PipelineSequence");
+  factory.registerNodeType<BT::PipelineSequence>("PipelineSequence");
 }

@@ -40,7 +40,7 @@ add_library(nav2_pipeline_sequence_bt_node SHARED plugins/control/pipeline_seque
 list(APPEND plugin_libs nav2_pipeline_sequence_bt_node)
 
 foreach(bt_plugin ${plugin_libs})
-  ament_target_dependencies(${bt_plugin} ${dependencies})
+  ament_target_dependencies(${bt_plugin} ${THIS_PACKAGE_INCLUDE_DEPENDS})
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)
 endforeach()
 

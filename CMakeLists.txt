@@ -36,8 +36,17 @@ ament_target_dependencies(${PROJECT_NAME}
   ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
 
+add_library(nav2_pipeline_sequence_bt_node SHARED plugins/control/pipeline_sequence.cpp)
+list(APPEND plugin_libs nav2_pipeline_sequence_bt_node)
+
+foreach(bt_plugin ${plugin_libs})
+  ament_target_dependencies(${bt_plugin} ${dependencies})
+  target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)
+endforeach()
+
 install(TARGETS 
   ${PROJECT_NAME}
+  ${plugin_libs}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -53,6 +62,7 @@ ament_export_include_directories(
 
 ament_export_libraries(
   ${PROJECT_NAME}
+  ${plugin_libs}
 )
 
 ament_export_dependencies(${THIS_PACKAGE_INCLUDE_DEPENDS})

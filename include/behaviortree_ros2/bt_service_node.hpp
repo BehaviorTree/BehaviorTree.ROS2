@@ -35,13 +35,15 @@ class BtServiceNode : public ActionNodeBase
 public:
   /**
    * @brief A nav2_behavior_tree::BtServiceNode constructor
+   * @param xml_tag_name Name for the XML tag for this node
    * @param service_node_name Service name this node creates a client for
    * @param conf BT node configuration
    */
   BtServiceNode(
-    const std::string & service_node_name,
+    const std::string & xml_tag_name,
+    const std::string & service_name,
     const NodeConfig& conf)
-  : ActionNodeBase(service_node_name, conf), service_node_name_(service_node_name)
+  : ActionNodeBase(xml_tag_name, conf), service_name_(service_name)
   {
     node_ = config().blackboard->template get<rclcpp::Node::SharedPtr>("node");
     callback_group_ = node_->create_callback_group(
@@ -57,7 +59,11 @@ public:
     getInput<std::chrono::milliseconds>("server_timeout", server_timeout_);
 
     // Now that we have node_ to use, create the service client for this BT service
-    getInput("service_name", service_name_);
+    std::string remapped_service_name;
+    if(getInput("service_name", remapped_service_name))
+    {
+      service_name_ = remapped_service_name;
+    }
     std::string node_namespace;
     node_namespace = node_->get_namespace();
     // Append namespace to the action name
@@ -80,7 +86,7 @@ public:
 
     RCLCPP_DEBUG(
       node_->get_logger(), "\"%s\" BtServiceNode initialized",
-      service_node_name_.c_str());
+      service_name_.c_str());
   }
 
   BtServiceNode() = delete;
@@ -214,7 +220,7 @@ protected:
     config().blackboard->template set<int>("number_recoveries", recovery_count);  // NOLINT
   }
 
-  std::string service_name_, service_node_name_;
+  std::string service_name_;
   typename std::shared_ptr<rclcpp::Client<ServiceT>> service_client_;
   std::shared_ptr<typename ServiceT::Request> request_;
 
@@ -236,25 +242,25 @@ protected:
   rclcpp::Time sent_time_;
 };
 
-/// Method to register the bt action into a factory.
-// template <class DerivedT> static
-// void register_bt_action(BT::BehaviorTreeFactory& factory,
-//     const std::string& registration_ID,
-//     const std::string& action_name)
-// {
-//   NodeBuilder builder = [=](const std::string& name, const NodeConfig& config)
-//   {
-//     return std::make_unique<DerivedT>(name, action_name, config);
-//   };
+/ Method to register the bt action into a factory.
+template <class DerivedT> static
+void register_bt_action(BT::BehaviorTreeFactory& factory,
+    const std::string& registration_ID,
+    const std::string& service_name)
+{
+  NodeBuilder builder = [=](const std::string& name, const NodeConfig& config)
+  {
+    return std::make_unique<DerivedT>(name, service_name, config);
+  };
 
-//   TreeNodeManifest manifest;
-//   manifest.type = getType<DerivedT>();
-//   manifest.ports = DerivedT::providedPorts();
-//   manifest.registration_ID = registration_ID;
-//   const auto& basic_ports = DerivedT::providedPorts();
-//   manifest.ports.insert(basic_ports.begin(), basic_ports.end());
-//   factory.registerBuilder(manifest, builder);
-// }
+  TreeNodeManifest manifest;
+  manifest.type = getType<DerivedT>();
+  manifest.ports = DerivedT::providedPorts();
+  manifest.registration_ID = registration_ID;
+  const auto& basic_ports = DerivedT::providedPorts();
+  manifest.ports.insert(basic_ports.begin(), basic_ports.end());
+  factory.registerBuilder(manifest, builder);
+}
 
 }  // namespace BT
 

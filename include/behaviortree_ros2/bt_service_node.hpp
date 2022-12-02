@@ -20,6 +20,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_ros2/bt_conversions.hpp"
 
 namespace BT
@@ -242,9 +243,9 @@ protected:
   rclcpp::Time sent_time_;
 };
 
-/ Method to register the bt action into a factory.
+/// Method to register the bt action into a factory.
 template <class DerivedT> static
-void register_bt_action(BT::BehaviorTreeFactory& factory,
+  void register_bt_action(BehaviorTreeFactory& factory,
     const std::string& registration_ID,
     const std::string& service_name)
 {

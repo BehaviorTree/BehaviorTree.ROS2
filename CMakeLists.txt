@@ -39,6 +39,9 @@ ament_target_dependencies(${PROJECT_NAME}
 add_library(pipeline_sequence_bt_node SHARED plugins/control/pipeline_sequence.cpp)
 list(APPEND plugin_libs pipeline_sequence_bt_node)
 
+add_library(rate_controller_bt_node SHARED plugins/decorator/rate_controller.cpp)
+list(APPEND plugin_libs rate_controller_bt_node)
+
 foreach(bt_plugin ${plugin_libs})
   ament_target_dependencies(${bt_plugin} ${THIS_PACKAGE_INCLUDE_DEPENDS})
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)

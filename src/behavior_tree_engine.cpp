@@ -14,6 +14,7 @@
 // limitations under the License.
 
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -65,6 +66,19 @@ BehaviorTreeEngine::run(
   }
 
   return (result == NodeStatus::SUCCESS) ? BtStatus::SUCCEEDED : BtStatus::FAILED;
+}
+
+void
+BehaviorTreeEngine::registerXMLFromDirectory(const std::string & search_directory)
+{
+  using std::filesystem::directory_iterator;
+  for (auto const& entry : directory_iterator(search_directory)) 
+  {
+    if( entry.path().extension() == ".xml")
+    {
+      factory_.registerBehaviorTreeFromFile(entry.path().string());
+    }
+  }
 }
 
 Tree

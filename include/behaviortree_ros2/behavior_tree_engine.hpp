@@ -63,6 +63,9 @@ public:
     std::function<bool()> cancelRequested,
     std::chrono::milliseconds loopTimeout = std::chrono::milliseconds(10));
 
+  void
+  registerXMLFromDirectory(const std::string & search_directory);
+
   /**
    * @brief Function to create a BT from a XML string
    * @param xml_string XML string representing BT

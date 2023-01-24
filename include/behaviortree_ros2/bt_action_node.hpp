@@ -5,8 +5,8 @@
 #include <string>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
-#include "behaviortree_cpp_v3/action_node.h"
-#include "behaviortree_cpp_v3/bt_factory.h"
+#include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp_action/rclcpp_action.hpp"
 
 namespace BT
@@ -16,7 +16,7 @@ struct ActionNodeParams
 {
   std::shared_ptr<rclcpp::Node> nh;
   std::string action_name;
-  std::chrono::milliseconds server_timeout;
+  std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
 };
 
 enum ActionNodeErrorCode
@@ -57,7 +57,7 @@ public:
    * Note that if the external_action_client is not set, the constructor will build its own.
    * */
   explicit RosActionNode(const std::string & instance_name,
-                         const BT::NodeConfiguration& conf,
+                         const BT::NodeConfig& conf,
                          const ActionNodeParams& params,
                          typename std::shared_ptr<ActionClient> external_action_client = {});
 
@@ -119,35 +119,13 @@ private:
   WrappedResult result_;
 };
 
-/// Method to register the service into a factory.
-/// It gives you the opportunity to set the ros::NodeHandle.
-template <class DerivedT> static
-  void RegisterRosAction(BT::BehaviorTreeFactory& factory,
-                    const std::string& registration_ID,
-                    const ActionNodeParams& params,
-                    std::shared_ptr<typename DerivedT::ActionClient> external_client = {} )
-{
-  NodeBuilder builder = [=](const std::string& name, const NodeConfiguration& config)
-  {
-    return std::make_unique<DerivedT>(name, config, params, external_client);
-  };
-
-  TreeNodeManifest manifest;
-  manifest.type = getType<DerivedT>();
-  manifest.ports = DerivedT::providedPorts();
-  manifest.registration_ID = registration_ID;
-  const auto& basic_ports = DerivedT::providedPorts();
-  manifest.ports.insert( basic_ports.begin(), basic_ports.end() );
-  factory.registerBuilder( manifest, builder );
-}
-
 //----------------------------------------------------------------
 //---------------------- DEFINITIONS -----------------------------
 //----------------------------------------------------------------
 
 template<class T> inline
   RosActionNode<T>::RosActionNode(const std::string & instance_name,
-                                  const BT::NodeConfiguration& conf,
+                                  const NodeConfig &conf,
                                   const ActionNodeParams& params,
                                   typename std::shared_ptr<ActionClient> external_action_client):
   BT::ActionNodeBase(instance_name, conf),
@@ -214,7 +192,7 @@ template<class T> inline
       {
         throw std::logic_error("onFeeback must not retunr IDLE");
       }
-      emitStateChanged();
+      emitWakeUpSignal();
     };
     //--------------------
     goal_options.result_callback =
@@ -222,7 +200,7 @@ template<class T> inline
     {
       RCLCPP_INFO( node_->get_logger(), "result_callback" );
       result_ = result;
-      emitStateChanged();
+      emitWakeUpSignal();
     };
     //--------------------
     goal_options.goal_response_callback =

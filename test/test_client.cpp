@@ -2,7 +2,11 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/executors.hpp>
 
-#include "behaviortree_ros2/action/sleep.hpp"
+#include "behaviortree_ros2/plugins.hpp"
+
+#ifndef USE_SLEEP_PLUGIN
+#include "sleep_action.hpp"
+#endif
 
 using namespace BT;
 
@@ -13,7 +17,7 @@ using namespace BT;
 class PrintValue : public BT::SyncActionNode
 {
 public:
-  PrintValue(const std::string& name, const BT::NodeConfiguration& config)
+  PrintValue(const std::string& name, const BT::NodeConfig& config)
   : BT::SyncActionNode(name, config) {}
 
   BT::NodeStatus tick() override {
@@ -32,42 +36,6 @@ public:
     return{ BT::InputPort<std::string>("message") };
   }
 };
-
-class SleepAction: public RosActionNode<behaviortree_ros2::action::Sleep>
-{
-public:
-  SleepAction(const std::string& name,
-              const BT::NodeConfiguration& conf,
-              const ActionNodeParams& params,
-              typename std::shared_ptr<ActionClient> action_client)
-    : RosActionNode<behaviortree_ros2::action::Sleep>(name, conf, params, action_client)
-  {}
-
-  static BT::PortsList providedPorts()
-  {
-    return {InputPort<unsigned>("msec")};
-  }
-
-  bool setGoal(Goal& goal) override
-  {
-    auto timeout = getInput<unsigned>("msec");
-    goal.msec_timeout = timeout.value();
-    return true;
-  }
-
-  BT::NodeStatus onResultReceived(const WrappedResult& wr) override
-  {
-    RCLCPP_INFO( node_->get_logger(), "onResultReceived %d", wr.result->done );
-    return wr.result->done ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
-  }
-
-  virtual BT::NodeStatus onFailure(ActionNodeErrorCode error) override
-  {
-    RCLCPP_ERROR( node_->get_logger(), "onFailure %d", error );
-    return NodeStatus::FAILURE;
-  }
-};
-
 
 //-----------------------------------------------------
 
@@ -99,18 +67,18 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-  ActionNodeParams params = {nh, "sleep_service", std::chrono::milliseconds(2000)};
-  RegisterRosAction<SleepAction>(factory, "Sleep", params);
+#ifdef USE_SLEEP_PLUGIN
+  // RegisterRosActionNode(factory, "../lib/libsleep_action_plugin.so", nh);
+#else
+  ActionNodeParams params;
+  params.nh = nh;
+  params.action_name = "sleep_service";
+  factory.registerNodeType<SleepAction>("Sleep", params);
+#endif
 
   auto tree = factory.createTreeFromText(xml_text);
 
-  NodeStatus status = NodeStatus::IDLE;
-
-  while( rclcpp::ok() )
-  {
-    status = tree.tickRoot();
-    tree.sleep(std::chrono::milliseconds(100));
-  }
+  tree.tickWhileRunning();
 
   return 0;
 }

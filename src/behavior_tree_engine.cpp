@@ -15,23 +15,31 @@
 
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
-#include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/utils/shared_library.h"
 #include "behaviortree_ros2/behavior_tree_engine.hpp"
+#include "behaviortree_ros2/plugins.hpp"
 
 namespace BT
 {
 
-BehaviorTreeEngine::BehaviorTreeEngine(const std::vector<std::string> & plugin_libraries)
+BehaviorTreeEngine::BehaviorTreeEngine(const std::vector<std::string> & plugin_libraries) 
+  : node_(rclcpp::Node::make_shared("bt_client_node", rclcpp::NodeOptions()))
 {
   SharedLibrary loader;
   for (const auto & p : plugin_libraries) {
-    factory_.registerFromPlugin(loader.getOSName(p));
+    // factory_.registerFromPlugin(loader.getOSName(p));
+    RegisterRosActionNode(factory_, loader.getOSName(p), node_);
   }
+  std::string tree_model = writeTreeNodesModelXML(factory_);
+  std::ofstream xml_file;
+  xml_file.open("/tree_model.xml");
+  xml_file << tree_model;
+  xml_file.close();
 }
 
 BtStatus
@@ -69,7 +77,7 @@ BehaviorTreeEngine::run(
 }
 
 void
-BehaviorTreeEngine::registerXMLFromDirectory(const std::string & search_directory)
+BehaviorTreeEngine::registerTreesFromDirectory(const std::string & search_directory)
 {
   using std::filesystem::directory_iterator;
   for (auto const& entry : directory_iterator(search_directory)) 
@@ -79,6 +87,24 @@ BehaviorTreeEngine::registerXMLFromDirectory(const std::string & search_director
       factory_.registerBehaviorTreeFromFile(entry.path().string());
     }
   }
+}
+
+void
+BehaviorTreeEngine::registerTreeFromFile(const std::string & file_path)
+{
+  factory_.registerBehaviorTreeFromFile(file_path);
+}
+
+void
+BehaviorTreeEngine::registerTreeFromText(const std::string & xml_string)
+{
+  factory_.registerBehaviorTreeFromText(xml_string);
+}
+
+Tree
+BehaviorTreeEngine::createTree(const std::string & tree_id, Blackboard::Ptr blackboard)
+{
+  return factory_.createTree(tree_id, blackboard);
 }
 
 Tree

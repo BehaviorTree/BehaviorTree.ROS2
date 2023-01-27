@@ -28,7 +28,9 @@ namespace BT
 {
 
 BehaviorTreeEngine::BehaviorTreeEngine(const std::vector<std::string> & plugin_libraries) 
-  : node_(rclcpp::Node::make_shared("bt_client_node", rclcpp::NodeOptions()))
+  : node_(rclcpp::Node::make_shared("bt_client_node",  rclcpp::NodeOptions().arguments({
+    "--ros-args", "-r", std::string("bt_client_node") + ":" + std::string("__node:=") + "bt_client_node"
+  })))
 {
   SharedLibrary loader;
   for (const auto & p : plugin_libraries) {

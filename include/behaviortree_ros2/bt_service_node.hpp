@@ -1,267 +1,258 @@
-// Copyright (c) 2019 Samsung Research America
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #ifndef BEHAVIOR_TREE_ROS2__BT_SERVICE_NODE_HPP_
 #define BEHAVIOR_TREE_ROS2__BT_SERVICE_NODE_HPP_
 
-#include <string>
 #include <memory>
-#include <rclcpp/rclcpp.hpp>
-
+#include <string>
+#include <rclcpp/executors.hpp>
+#include <rclcpp/allocator/allocator_common.hpp>
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
-#include "behaviortree_ros2/bt_conversions.hpp"
+#include "behaviortree_ros2/node_params.hpp"
 
 namespace BT
 {
 
+enum ServiceNodeErrorCode
+{
+  SERVICE_UNREACHABLE,
+  SERVICE_TIMEOUT,
+  INVALID_REQUEST,
+  SERVICE_ABORTED
+};
+
 /**
- * @brief Abstract class representing a service based BT node
- * @tparam ServiceT Type of service
+ * @brief Abstract class representing use to call a ROS2 Service (client).
+ *
+ * It will try to be non-blocking for the entire duration of the call.
+ * The derived class whould reimplement the virtual methods as described below.
  */
 template<class ServiceT>
-class BtServiceNode : public ActionNodeBase
+class RosServiceNode : public BT::ActionNodeBase
 {
+
 public:
-  /**
-   * @brief A nav2_behavior_tree::BtServiceNode constructor
-   * @param xml_tag_name Name for the XML tag for this node
-   * @param service_node_name Service name this node creates a client for
-   * @param conf BT node configuration
-   */
-  BtServiceNode(
-    const std::string & xml_tag_name,
-    const std::string & service_name,
-    const NodeConfig& conf)
-  : ActionNodeBase(xml_tag_name, conf), service_name_(service_name)
-  {
-    node_ = config().blackboard->template get<rclcpp::Node::SharedPtr>("node");
-    callback_group_ = node_->create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive,
-      false);
-    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+  // Type definitions
+  using ServiceClient = typename rclcpp::Client<ServiceT>;
+  using Request = typename ServiceT::Request;
+  using Response = typename ServiceT::Response;
 
-    // Get the required items from the blackboard
-    bt_loop_duration_ =
-      config().blackboard->template get<std::chrono::milliseconds>("bt_loop_duration");
-    server_timeout_ =
-      config().blackboard->template get<std::chrono::milliseconds>("server_timeout");
-    getInput<std::chrono::milliseconds>("server_timeout", server_timeout_);
+  /** You are not supposed to instantiate this class directly, the factory will do it.
+   * To register this class into the factory, use:
+   *
+   *    RegisterRosAction<DerivedClasss>(factory, params)
+   *
+   * Note that if the external_action_client is not set, the constructor will build its own.
+   * */
+  explicit RosServiceNode(const std::string & instance_name,
+                         const BT::NodeConfig& conf,
+                         const NodeParams& params,
+                         typename std::shared_ptr<ServiceClient> external_service_client = {});
 
-    // Now that we have node_ to use, create the service client for this BT service
-    std::string remapped_service_name;
-    if(getInput("service_name", remapped_service_name))
-    {
-      service_name_ = remapped_service_name;
-    }
-    std::string node_namespace;
-    node_namespace = node_->get_namespace();
-    // Append namespace to the action name
-    if(node_namespace != "/") {
-      service_name_ = node_namespace + "/" + service_name_;
-    }
-    service_client_ = node_->create_client<ServiceT>(
-      service_name_,
-      rmw_qos_profile_services_default,
-      callback_group_);
-
-    // Make a request for the service without parameter
-    request_ = std::make_shared<typename ServiceT::Request>();
-
-    // Make sure the server is actually there before continuing
-    RCLCPP_DEBUG(
-      node_->get_logger(), "Waiting for \"%s\" service",
-      service_name_.c_str());
-    service_client_->wait_for_service();
-
-    RCLCPP_DEBUG(
-      node_->get_logger(), "\"%s\" BtServiceNode initialized",
-      service_name_.c_str());
-  }
-
-  BtServiceNode() = delete;
-
-  virtual ~BtServiceNode()
-  {
-  }
+  virtual ~RosServiceNode() = default;
 
   /**
-   * @brief Any subclass of BtServiceNode that accepts parameters must provide a
+   * @brief Any subclass of BtActionNode that accepts parameters must provide a
    * providedPorts method and call providedBasicPorts in it.
    * @param addition Additional ports to add to BT port list
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedBasicPorts(PortsList addition)
-  {
-    PortsList basic = {
-      InputPort<std::string>("service_name", "please_set_service_name_in_BT_Node"),
-      InputPort<std::chrono::milliseconds>("server_timeout")
-    };
-    basic.insert(addition.begin(), addition.end());
-
-    return basic;
-  }
+  static PortsList providedBasicPorts(PortsList addition);
 
   /**
    * @brief Creates list of BT ports
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedPorts()
-  {
-    return providedBasicPorts({});
+  static PortsList providedPorts();
+
+  NodeStatus tick() override final;
+
+  /// The default halt() implementation.
+  void halt() override;
+
+  /** setRequest is a callback invoked to return the request message (ServiceT::Request).
+   * If conditions are not met, it should return "false" and the BT::Action
+   * will return FAILURE.
+   */
+  virtual bool setRequest(typename Request::SharedPtr& request) = 0;
+
+  /** Callback invoked when the response is received by the server.
+   * It is up to the user to define if the BT::action returns SUCCESS or FAILURE.
+   */
+  virtual BT::NodeStatus onResponseReceived(const typename Response::SharedPtr& response) = 0;
+
+  /** Callback invoked when something goes wrong.
+   * It must return either SUCCESS or FAILURE.
+   */
+  virtual BT::NodeStatus onFailure(ServiceNodeErrorCode error)
+  { 
+    (void) error;
+    return NodeStatus::FAILURE;
   }
 
-  /**
-   * @brief The main override required by a BT service
-   * @return NodeStatus Status of tick execution
-   */
-  NodeStatus tick() override
+protected:
+
+  std::shared_ptr<rclcpp::Node> node_;
+  std::string service_name_;
+  const std::chrono::milliseconds service_timeout_;
+
+private:
+
+  typename std::shared_ptr<ServiceClient> service_client_;
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
+
+  // std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
+  // typename GoalHandle::SharedPtr goal_handle_;
+  std::shared_future<typename Response::SharedPtr> future_response_;
+
+  rclcpp::Time time_request_sent_;
+  NodeStatus on_feedback_state_change_;
+  bool response_received_;
+  typename Response::SharedPtr response_;
+};
+
+//----------------------------------------------------------------
+//---------------------- DEFINITIONS -----------------------------
+//----------------------------------------------------------------
+
+template<class T> inline
+  RosServiceNode<T>::RosServiceNode(const std::string & instance_name,
+                                  const NodeConfig &conf,
+                                  const NodeParams& params,
+                                  typename std::shared_ptr<ServiceClient> external_service_client):
+  BT::ActionNodeBase(instance_name, conf),
+  node_(params.nh),
+  service_name_(params.server_name),
+  service_timeout_(params.server_timeout)
+{
+  if( external_service_client )
   {
-    if (!request_sent_) {
-      on_tick();
-      future_result_ = service_client_->async_send_request(request_).share();
-      sent_time_ = node_->now();
-      request_sent_ = true;
+    service_client_ = external_service_client;
+  }
+  else
+  {
+    std::string remapped_service_name;
+    if (getInput("server_name", remapped_service_name)) {
+      service_name_ = remapped_service_name;
     }
-    return check_future();
+    std::string node_namespace = node_->get_namespace();
+    // Append namespace to the service name
+    if(node_namespace != "/") {
+      service_name_ = node_namespace + "/" + service_name_;
+    }
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    const rmw_qos_profile_t& qos_profile_{rmw_qos_profile_services_default};
+    service_client_ = node_->create_client<T>(service_name_, qos_profile_, callback_group_);
+
+    bool found = service_client_->wait_for_service(service_timeout_);
+    if(!found)
+    {
+      RCLCPP_ERROR(node_->get_logger(),
+                   "Service [%s] is not reachable. This will be checked only once", service_name_.c_str());
+    }
+  }
+}
+
+template<class T> inline
+  PortsList RosServiceNode<T>::providedBasicPorts(PortsList addition)
+{
+  PortsList basic = {
+    InputPort<std::string>("service_name", "Service name")
+  };
+  basic.insert(addition.begin(), addition.end());
+  return basic;
+}
+
+template<class T> inline
+  PortsList RosServiceNode<T>::providedPorts()
+{
+  return providedBasicPorts({});
+}
+
+template<class T> inline
+  NodeStatus RosServiceNode<T>::tick()
+{
+  auto CheckStatus = [](NodeStatus status)
+  {
+    if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
+    {
+      throw std::logic_error("RosServiceNode: the callback must return either SUCCESS or FAILURE");
+    }
+    return status;
+  };
+
+  // first step to be done only at the beginning of the Action
+  if (status() == BT::NodeStatus::IDLE)
+  {
+    setStatus(NodeStatus::RUNNING);
+
+    response_received_ = false;
+    future_response_ = {};
+    on_feedback_state_change_ = NodeStatus::RUNNING;
+    response_ = {};
+
+    typename Request::SharedPtr request;
+
+    if( !setRequest(request) )
+    {
+      return CheckStatus( onFailure(INVALID_REQUEST) );
+    }
+
+    future_response_ = service_client_->async_send_request(request).share();
+    time_request_sent_ = node_->now();
+
+    return NodeStatus::RUNNING;
   }
 
-  /**
-   * @brief The other (optional) override required by a BT service.
-   */
-  void halt() override
+  if (status() == NodeStatus::RUNNING)
   {
-    request_sent_ = false;
-    resetStatus();
-  }
+    rclcpp::spin_some(node_);
 
-  /**
-   * @brief Function to perform some user-defined operation on tick
-   * Fill in service request with information if necessary
-   */
-  virtual void on_tick()
-  {
-  }
+    // FIRST case: check if the goal request has a timeout
+    if( !response_received_ )
+    {
+      auto nodelay = std::chrono::milliseconds(0);
+      auto timeout = rclcpp::Duration::from_seconds( double(service_timeout_.count()) / 1000);
 
-  /**
-   * @brief Function to perform some user-defined operation upon successful
-   * completion of the service. Could put a value on the blackboard.
-   * @param response can be used to get the result of the service call in the BT Node.
-   * @return NodeStatus Returns SUCCESS by default, user may override to return another value
-   */
-  virtual NodeStatus on_completion(std::shared_ptr<typename ServiceT::Response>/*response*/)
-  {
-    return NodeStatus::SUCCESS;
-  }
-
-  /**
-   * @brief Check the future and decide the status of BT
-   * @return NodeStatus SUCCESS if future complete before timeout, FAILURE otherwise
-   */
-  virtual NodeStatus check_future()
-  {
-    auto elapsed = (node_->now() - sent_time_).to_chrono<std::chrono::milliseconds>();
-    auto remaining = server_timeout_ - elapsed;
-
-    if (remaining > std::chrono::milliseconds(0)) {
-      auto timeout = remaining > bt_loop_duration_ ? bt_loop_duration_ : remaining;
-
-      rclcpp::FutureReturnCode rc;
-      rc = callback_group_executor_.spin_until_future_complete(future_result_, server_timeout_);
-      if (rc == rclcpp::FutureReturnCode::SUCCESS) {
-        request_sent_ = false;
-        NodeStatus status = on_completion(future_result_.get());
-        return status;
-      }
-
-      if (rc == rclcpp::FutureReturnCode::TIMEOUT) {
-        on_wait_for_result();
-        elapsed = (node_->now() - sent_time_).to_chrono<std::chrono::milliseconds>();
-        if (elapsed < server_timeout_) {
+      if (rclcpp::spin_until_future_complete(node_, future_response_, nodelay) !=
+          rclcpp::FutureReturnCode::SUCCESS)
+      {
+        RCLCPP_WARN( node_->get_logger(), "waiting response confirmation" );
+        if( (node_->now() - time_request_sent_) > timeout )
+        {
+          RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );
+          return CheckStatus( onFailure(SERVICE_TIMEOUT) );
+        }
+        else{
           return NodeStatus::RUNNING;
+        }
+      }
+      else
+      {
+        response_received_ = true;
+        response_ = future_response_.get();
+        future_response_ = {};
+
+        if (!response_) {
+          throw std::runtime_error("Request was rejected by the service");
         }
       }
     }
 
-    RCLCPP_WARN(
-      node_->get_logger(),
-      "Node timed out while executing service call to %s.", service_name_.c_str());
-    request_sent_ = false;
-    return NodeStatus::FAILURE;
+    // SECOND case: response received
+    return CheckStatus( onResponseReceived( response_ ) );
   }
-
-  /**
-   * @brief Function to perform some user-defined operation after a timeout waiting
-   * for a result that hasn't been received yet
-   */
-  virtual void on_wait_for_result()
-  {
-  }
-
-protected:
-  /**
-   * @brief Function to increment recovery count on blackboard if this node wraps a recovery
-   */
-  void increment_recovery_count()
-  {
-    int recovery_count = 0;
-    config().blackboard->template get<int>("number_recoveries", recovery_count);  // NOLINT
-    recovery_count += 1;
-    config().blackboard->template set<int>("number_recoveries", recovery_count);  // NOLINT
-  }
-
-  std::string service_name_;
-  typename std::shared_ptr<rclcpp::Client<ServiceT>> service_client_;
-  std::shared_ptr<typename ServiceT::Request> request_;
-
-  // The node that will be used for any ROS operations
-  rclcpp::Node::SharedPtr node_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
-
-  // The timeout value while to use in the tick loop while waiting for
-  // a result from the server
-  std::chrono::milliseconds server_timeout_;
-
-  // The timeout value for BT loop execution
-  std::chrono::milliseconds bt_loop_duration_;
-
-  // To track the server response when a new request is sent
-  std::shared_future<typename ServiceT::Response::SharedPtr> future_result_;
-  bool request_sent_{false};
-  rclcpp::Time sent_time_;
-};
-
-/// Method to register the bt action into a factory.
-template <class DerivedT> static
-  void register_bt_action(BehaviorTreeFactory& factory,
-    const std::string& registration_ID,
-    const std::string& service_name)
-{
-  NodeBuilder builder = [=](const std::string& name, const NodeConfig& config)
-  {
-    return std::make_unique<DerivedT>(name, service_name, config);
-  };
-
-  TreeNodeManifest manifest;
-  manifest.type = getType<DerivedT>();
-  manifest.ports = DerivedT::providedPorts();
-  manifest.registration_ID = registration_ID;
-  const auto& basic_ports = DerivedT::providedPorts();
-  manifest.ports.insert(basic_ports.begin(), basic_ports.end());
-  factory.registerBuilder(manifest, builder);
+  return NodeStatus::RUNNING;
 }
+
+template<class T> inline
+  void RosServiceNode<T>::halt()
+{
+  if( status() == NodeStatus::RUNNING )
+  {
+    resetStatus();
+  }
+}
+
 
 }  // namespace BT
 

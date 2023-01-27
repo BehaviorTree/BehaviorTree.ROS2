@@ -8,16 +8,10 @@
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "behaviortree_ros2/node_params.hpp"
 
 namespace BT
 {
-
-struct ActionNodeParams
-{
-  std::shared_ptr<rclcpp::Node> nh;
-  std::string action_name;
-  std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
-};
 
 enum ActionNodeErrorCode
 {
@@ -47,7 +41,7 @@ public:
   using GoalHandle = typename rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
   using Feedback = typename ActionT::Feedback;
-  using Params = ActionNodeParams;
+  using Params = NodeParams;
 
   /** You are not supposed to instantiate this class directly, the factory will do it.
    * To register this class into the factory, use:
@@ -58,10 +52,24 @@ public:
    * */
   explicit RosActionNode(const std::string & instance_name,
                          const BT::NodeConfig& conf,
-                         const ActionNodeParams& params,
+                         const NodeParams& params,
                          typename std::shared_ptr<ActionClient> external_action_client = {});
 
   virtual ~RosActionNode() = default;
+
+  /**
+   * @brief Any subclass of BtActionNode that accepts parameters must provide a
+   * providedPorts method and call providedBasicPorts in it.
+   * @param addition Additional ports to add to BT port list
+   * @return PortsList Containing basic ports along with node-specific ports
+   */
+  static PortsList providedBasicPorts(PortsList addition);
+
+  /**
+   * @brief Creates list of BT ports
+   * @return PortsList Containing basic ports along with node-specific ports
+   */
+  static PortsList providedPorts();
 
   NodeStatus tick() override final;
 
@@ -85,6 +93,7 @@ public:
    */
   virtual BT::NodeStatus onFeeback(const std::shared_ptr<const Feedback> feedback)
   {
+    (void) feedback;
     return NodeStatus::RUNNING;
   }
 
@@ -92,7 +101,8 @@ public:
    * It must return either SUCCESS or FAILURE.
    */
   virtual BT::NodeStatus onFailure(ActionNodeErrorCode error)
-  {
+  { 
+    (void) error;
     return NodeStatus::FAILURE;
   }
 
@@ -102,7 +112,7 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  const std::string action_name_;
+  std::string action_name_;
   const std::chrono::milliseconds server_timeout_;
 
 private:
@@ -126,11 +136,11 @@ private:
 template<class T> inline
   RosActionNode<T>::RosActionNode(const std::string & instance_name,
                                   const NodeConfig &conf,
-                                  const ActionNodeParams& params,
+                                  const NodeParams& params,
                                   typename std::shared_ptr<ActionClient> external_action_client):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
-  action_name_(params.action_name),
+  action_name_(params.server_name),
   server_timeout_(params.server_timeout)
 {
   if( external_action_client )
@@ -139,6 +149,15 @@ template<class T> inline
   }
   else
   {
+    std::string remapped_action_name;
+    if (getInput("server_name", remapped_action_name)) {
+      action_name_ = remapped_action_name;
+    }
+    std::string node_namespace = node_->get_namespace();
+    // Append namespace to the action name
+    if(node_namespace != "/") {
+      action_name_ = node_namespace + "/" + action_name_;
+    }
     callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
 
@@ -149,6 +168,22 @@ template<class T> inline
                    "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
     }
   }
+}
+
+template<class T> inline
+  PortsList RosActionNode<T>::providedBasicPorts(PortsList addition)
+{
+  PortsList basic = {
+    InputPort<std::string>("server_name", "Action server name")
+  };
+  basic.insert(addition.begin(), addition.end());
+  return basic;
+}
+
+template<class T> inline
+  PortsList RosActionNode<T>::providedPorts()
+{
+  return providedBasicPorts({});
 }
 
 template<class T> inline
@@ -204,7 +239,7 @@ template<class T> inline
     };
     //--------------------
     goal_options.goal_response_callback =
-      [this](std::shared_future<typename GoalHandle::SharedPtr> const future_handle)
+      [this](typename GoalHandle::SharedPtr const future_handle)
     {
       auto goal_handle_ = future_handle.get();
       if (!goal_handle_)

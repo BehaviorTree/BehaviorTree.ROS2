@@ -136,12 +136,12 @@ template<class T> inline
     }
     std::string node_namespace = node_->get_namespace();
     // Append namespace to the service name
-    if(node_namespace != "/") {
+    if(node_namespace != "/" && service_name_.front() != '/') {
       service_name_ = node_namespace + "/" + service_name_;
     }
     callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    const rmw_qos_profile_t& qos_profile_{rmw_qos_profile_services_default};
-    service_client_ = node_->create_client<T>(service_name_, qos_profile_, callback_group_);
+    const rmw_qos_profile_t& qos_profile{rmw_qos_profile_services_default};
+    service_client_ = node_->create_client<T>(service_name_, qos_profile, callback_group_);
 
     bool found = service_client_->wait_for_service(service_timeout_);
     if(!found)
@@ -156,7 +156,7 @@ template<class T> inline
   PortsList RosServiceNode<T>::providedBasicPorts(PortsList addition)
 {
   PortsList basic = {
-    InputPort<std::string>("service_name", "Service name")
+    InputPort<std::string>("server_name", "Service name")
   };
   basic.insert(addition.begin(), addition.end());
   return basic;
@@ -190,7 +190,7 @@ template<class T> inline
     on_feedback_state_change_ = NodeStatus::RUNNING;
     response_ = {};
 
-    typename Request::SharedPtr request;
+    typename Request::SharedPtr request = std::make_shared<Request>();
 
     if( !setRequest(request) )
     {

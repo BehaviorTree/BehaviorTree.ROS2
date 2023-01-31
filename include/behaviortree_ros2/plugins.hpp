@@ -2,8 +2,7 @@
 
 #include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/utils/shared_library.h"
-#include "behaviortree_ros2/bt_action_node.hpp"
-#include "behaviortree_ros2/bt_service_node.hpp"
+#include "behaviortree_ros2/node_params.hpp"
 
 #ifdef BT_PLUGIN_EXPORT
 
@@ -28,9 +27,9 @@
 // Usage example:
 //   RegisterROSActionNode(SleepAction, "Sleep", "sleep_service");
 
-#define RegisterROSActionNode(TYPE, REGISTRATION_NAME, DEFAULT_SERVER_NAME)     \
+#define RegisterROSBTNode(TYPE, REGISTRATION_NAME, DEFAULT_SERVER_NAME)         \
 BTCPP_EXPORT void                                                               \
-BT_RegisterROSBTActionFromPlugin(BT::BehaviorTreeFactory& factory,              \
+BT_RegisterROSBTNodeFromPlugin(BT::BehaviorTreeFactory& factory,                \
                                rclcpp::Node::SharedPtr node,                    \
                                const std::string& server_name)                  \
 {                                                                               \
@@ -43,13 +42,13 @@ BT_RegisterROSBTActionFromPlugin(BT::BehaviorTreeFactory& factory,              
 
 
 inline
-void RegisterRosActionNode(BT::BehaviorTreeFactory& factory,
+void RegisterRosBTNode(BT::BehaviorTreeFactory& factory,
                            const std::string& filepath,
                            rclcpp::Node::SharedPtr node,
                            const std::string& server_name = {})
 {
   BT::SharedLibrary loader(filepath);
   typedef void (*Func)(BT::BehaviorTreeFactory&, rclcpp::Node::SharedPtr, const std::string&);
-  auto func = (Func)loader.getSymbol("BT_RegisterROSBTActionFromPlugin");
+  auto func = (Func)loader.getSymbol("BT_RegisterROSBTNodeFromPlugin");
   func(factory, node, server_name);
 }

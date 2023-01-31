@@ -34,8 +34,7 @@ BehaviorTreeEngine::BehaviorTreeEngine(const std::vector<std::string> & plugin_l
 {
   SharedLibrary loader;
   for (const auto & p : plugin_libraries) {
-    // factory_.registerFromPlugin(loader.getOSName(p));
-    RegisterRosActionNode(factory_, loader.getOSName(p), node_);
+    RegisterRosBTNode(factory_, loader.getOSName(p), node_);
   }
   std::string tree_model = writeTreeNodesModelXML(factory_);
   std::ofstream xml_file;

@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 #else
   ActionNodeParams params;
   params.nh = nh;
-  params.action_name = "sleep_service";
+  params.default_action_name = "sleep_service";
   factory.registerNodeType<SleepAction>("Sleep", params);
 #endif
 

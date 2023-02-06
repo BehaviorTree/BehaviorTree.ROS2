@@ -91,7 +91,7 @@ public:
    * It generally returns RUNNING, but the user can also use this callback to cancel the
    * current action and return SUCCESS or FAILURE.
    */
-  virtual BT::NodeStatus onFeeback(const std::shared_ptr<const Feedback> feedback)
+  virtual BT::NodeStatus onFeedback(const std::shared_ptr<const Feedback> feedback)
   {
     (void) feedback;
     return NodeStatus::RUNNING;
@@ -222,10 +222,10 @@ template<class T> inline
       [this](typename GoalHandle::SharedPtr,
              const std::shared_ptr<const Feedback> feedback)
     {
-      on_feedback_state_change_ = onFeeback(feedback);
+      on_feedback_state_change_ = onFeedback(feedback);
       if( on_feedback_state_change_ == NodeStatus::IDLE)
       {
-        throw std::logic_error("onFeeback must not retunr IDLE");
+        throw std::logic_error("onFeedback must not retunr IDLE");
       }
       emitWakeUpSignal();
     };
@@ -292,7 +292,7 @@ template<class T> inline
       }
     }
 
-    // SECOND case: onFeeback requested a stop
+    // SECOND case: onFeedback requested a stop
     if( on_feedback_state_change_ != NodeStatus::RUNNING )
     {
       cancelGoal();

@@ -70,6 +70,12 @@ public:
 
   void registerTreeFromText(const std::string & xml_string);
 
+  template<typename T>
+  void registerEnums()
+  {
+    factory_.registerScriptingEnums<T>();
+  }
+
   Tree createTree(const std::string & tree_id, Blackboard::Ptr blackboard);
 
   /**

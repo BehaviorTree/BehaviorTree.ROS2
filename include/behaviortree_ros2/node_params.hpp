@@ -12,7 +12,7 @@ struct NodeParams
 {
   std::shared_ptr<rclcpp::Node> nh;
   std::string server_name;
-  std::chrono::milliseconds server_timeout = std::chrono::milliseconds(10000);
+  std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
 };
 
 } // namespace BT

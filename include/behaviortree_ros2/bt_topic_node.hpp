@@ -90,6 +90,7 @@ private:
   std::shared_ptr<Subscriber> subscriber_;
   typename TopicT::SharedPtr last_msg_;
   bool is_message_received_;
+  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 };
 
 //----------------------------------------------------------------
@@ -113,7 +114,8 @@ template<class T> inline
   if(node_namespace != "/" && topic_name_.front() != '/') {
     topic_name_ = node_namespace + "/" + topic_name_;
   }
-  auto callback_group = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  auto callback_group = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+  callback_group_executor_.add_callback_group(callback_group, node_->get_node_base_interface());
   rclcpp::SubscriptionOptions sub_option;
     sub_option.callback_group = callback_group;
   subscriber_ = node_->create_subscription<T>(topic_name_, 1, std::bind(&RosTopicNode::topicCallback, this, std::placeholders::_1), sub_option);
@@ -153,7 +155,7 @@ template<class T> inline
     return status;
   };
   last_msg_ = nullptr;
-  rclcpp::spin_some(node_);
+  callback_group_executor_.spin_some();
   if (last_msg_) {
     return CheckStatus (onMessageReceived(last_msg_));
   }

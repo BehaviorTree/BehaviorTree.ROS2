@@ -12,14 +12,6 @@
 namespace BT
 {
 
-// enum ServiceNodeErrorCode
-// {
-//   SERVICE_UNREACHABLE,
-//   SERVICE_TIMEOUT,
-//   INVALID_REQUEST,
-//   SERVICE_ABORTED
-// };
-
 /**
  * @brief Abstract class representing use to call a ROS2 Service (client).
  *
@@ -53,13 +45,23 @@ public:
    * @param addition Additional ports to add to BT port list
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedBasicPorts(PortsList addition);
+  static PortsList providedBasicPorts(PortsList addition)
+  {
+    PortsList basic = {
+      InputPort<std::string>("topic_name", "Topic name")
+    };
+    basic.insert(addition.begin(), addition.end());
+    return basic;
+  }
 
   /**
    * @brief Creates list of BT ports
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedPorts();
+  static PortsList providedPorts()
+  {
+    return providedBasicPorts({});
+  }
 
   NodeStatus tick() override final;
 
@@ -83,13 +85,17 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string topic_name_;
+  std::string prev_topic_name_;
+  bool topic_name_may_change_ = false;
 
 private:
+
+  bool createSubscriber(const std::string& topic_name);
 
   std::shared_ptr<Subscriber> subscriber_;
   typename TopicT::SharedPtr last_msg_;
   bool is_message_received_;
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 };
 
@@ -102,39 +108,58 @@ template<class T> inline
                                   const NodeConfig &conf,
                                   const NodeParams& params)
     : BT::ConditionNode(instance_name, conf),
-      node_(params.nh),
-      topic_name_(params.server_name)
+      node_(params.nh)
+{ 
+  // If the content of the port "action_name" is not
+  // a pointer to the blackboard, but a static string, we can
+  // create the client in the constructor.
+  const std::string topic_name = config().input_ports.at("topic_name");    
+  if(topic_name.empty())
+  {
+    if(params.default_server_name.empty())
+    {
+      throw RuntimeError("Both default_server_name  and topic_name is empty");
+    }
+    createSubscriber(params.default_server_name);
+  }
+  else if(!isBlackboardPointer(topic_name))
+  {
+    createSubscriber(topic_name);
+  }
+  else {
+    topic_name_may_change_ = true;
+  }
+  // std::string remapped_topic_name;
+  // if (getInput("server_name", remapped_topic_name)) {
+  //   topic_name_ = remapped_topic_name;
+  // }
+  // std::string node_namespace = node_->get_namespace();
+  // // Append namespace to the service name
+  // if(node_namespace != "/" && topic_name_.front() != '/') {
+  //   topic_name_ = node_namespace + "/" + topic_name_;
+  // }
+  // auto callback_group = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+  // callback_group_executor_.add_callback_group(callback_group, node_->get_node_base_interface());
+  // rclcpp::SubscriptionOptions sub_option;
+  //   sub_option.callback_group = callback_group;
+  // subscriber_ = node_->create_subscription<T>(topic_name_, 1, std::bind(&RosTopicNode::topicCallback, this, std::placeholders::_1), sub_option);
+}
+
+template<class T> inline
+  bool RosTopicNode<T>::createSubscriber(const std::string& topic_name)
 {
-  std::string remapped_topic_name;
-  if (getInput("server_name", remapped_topic_name)) {
-    topic_name_ = remapped_topic_name;
+  if(topic_name.empty())
+  {
+    throw RuntimeError("topic_name is empty");
   }
-  std::string node_namespace = node_->get_namespace();
-  // Append namespace to the service name
-  if(node_namespace != "/" && topic_name_.front() != '/') {
-    topic_name_ = node_namespace + "/" + topic_name_;
-  }
-  auto callback_group = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
-  callback_group_executor_.add_callback_group(callback_group, node_->get_node_base_interface());
+  
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
   rclcpp::SubscriptionOptions sub_option;
-    sub_option.callback_group = callback_group;
-  subscriber_ = node_->create_subscription<T>(topic_name_, 1, std::bind(&RosTopicNode::topicCallback, this, std::placeholders::_1), sub_option);
-}
-
-template<class T> inline
-  PortsList RosTopicNode<T>::providedBasicPorts(PortsList addition)
-{
-  PortsList basic = {
-    InputPort<std::string>("server_name", "Topic name")
-  };
-  basic.insert(addition.begin(), addition.end());
-  return basic;
-}
-
-template<class T> inline
-  PortsList RosTopicNode<T>::providedPorts()
-{
-  return providedBasicPorts({});
+  sub_option.callback_group = callback_group_;
+  subscriber_ = node_->create_subscription<T>(topic_name, 1, std::bind(&RosTopicNode::topicCallback, this, std::placeholders::_1), sub_option);
+  prev_topic_name_ = topic_name;
+  return true;
 }
 
 template<class T> inline
@@ -146,6 +171,19 @@ template<class T> inline
 template<class T> inline
   NodeStatus RosTopicNode<T>::tick()
 {
+  // First, check if the subscriber_ is valid and that the name of the
+  // topic_name in the port didn't change.
+  // otherwise, create a new subscriber
+  if(!subscriber_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
+  {
+    std::string topic_name;
+    getInput("topic_name", topic_name);
+    if(prev_topic_name_ != topic_name)
+    {
+      createSubscriber(topic_name);
+    }
+  }
+
   auto CheckStatus = [](NodeStatus status)
   {
     if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )

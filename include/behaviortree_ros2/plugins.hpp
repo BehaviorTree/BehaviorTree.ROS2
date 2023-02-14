@@ -34,7 +34,8 @@ BT_RegisterROSBTNodeFromPlugin(BT::BehaviorTreeFactory& factory,                
                                const std::string& server_name)                  \
 {                                                                               \
   BT::NodeParams params;                                                        \
-  params.server_name = server_name.empty() ? DEFAULT_SERVER_NAME : server_name; \
+  params.default_server_name =                                                  \
+      server_name.empty() ? DEFAULT_SERVER_NAME : server_name;                  \
   params.nh = node;                                                             \
   factory.registerNodeType<TYPE>(REGISTRATION_NAME, params);                    \
 }                                                                               \

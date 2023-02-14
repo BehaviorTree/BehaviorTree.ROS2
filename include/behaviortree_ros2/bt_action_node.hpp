@@ -63,13 +63,22 @@ public:
    * @param addition Additional ports to add to BT port list
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedBasicPorts(PortsList addition);
+  static PortsList providedBasicPorts(PortsList addition)
+  {
+    PortsList basic = {
+      InputPort<std::string>("action_name", "Action server name")
+    };
+    basic.insert(addition.begin(), addition.end());
+    return basic;
+  }
 
   /**
    * @brief Creates list of BT ports
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedPorts();
+  static PortsList providedPorts(){
+    return providedBasicPorts({});
+  }
 
   NodeStatus tick() override final;
 
@@ -112,10 +121,13 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string action_name_;
+  std::string prev_action_name_;
+  bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
 
 private:
+
+  bool createClient(const std::string &action_name);
 
   typename std::shared_ptr<ActionClient> action_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -140,7 +152,6 @@ template<class T> inline
                                   typename std::shared_ptr<ActionClient> external_action_client):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
-  action_name_(params.server_name),
   server_timeout_(params.server_timeout)
 {
   if( external_action_client )
@@ -149,46 +160,84 @@ template<class T> inline
   }
   else
   {
-    std::string remapped_action_name;
-    if (getInput("server_name", remapped_action_name)) {
-      action_name_ = remapped_action_name;
-    }
-    std::string node_namespace = node_->get_namespace();
-    // Append namespace to the action name
-    if(node_namespace != "/") {
-      action_name_ = node_namespace + "/" + action_name_;
-    }
-    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
-
-    bool found = action_client_->wait_for_action_server(server_timeout_);
-    if(!found)
+    // If the content of the port "action_name" is not
+    // a pointer to the blackboard, but a static string, we can
+    // create the client in the constructor.
+    const std::string action_name = config().input_ports.at("action_name");    
+    if(action_name.empty())
     {
-      RCLCPP_ERROR(node_->get_logger(),
-                   "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
+      if(params.default_server_name.empty())
+      {
+        throw RuntimeError("Both default_server_name  and action_name is empty");
+      }
+      createClient(params.default_server_name);
     }
+    else if(!isBlackboardPointer(action_name))
+    {
+      createClient(action_name);
+    }
+    else {
+      action_name_may_change_ = true;
+    }
+
+    // std::string remapped_action_name;
+    // if (getInput("action_name", remapped_action_name)) {
+    //   action_name_ = remapped_action_name;
+    // }
+    // std::string node_namespace = node_->get_namespace();
+    // // Append namespace to the action name
+    // if(node_namespace != "/") {
+    //   action_name_ = node_namespace + "/" + action_name_;
+    // }
+    // callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    // action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
+
+    // bool found = action_client_->wait_for_action_server(server_timeout_);
+    // if(!found)
+    // {
+    //   RCLCPP_ERROR(node_->get_logger(),
+    //                "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
+    // }
   }
 }
 
 template<class T> inline
-  PortsList RosActionNode<T>::providedBasicPorts(PortsList addition)
+  bool RosActionNode<T>::createClient(const std::string& action_name)
 {
-  PortsList basic = {
-    InputPort<std::string>("server_name", "Action server name")
-  };
-  basic.insert(addition.begin(), addition.end());
-  return basic;
-}
+  if(action_name.empty())
+  {
+    throw RuntimeError("action_name is empty");
+  }
+  
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+  prev_action_name_ = action_name;
 
-template<class T> inline
-  PortsList RosActionNode<T>::providedPorts()
-{
-  return providedBasicPorts({});
+  bool found = action_client_->wait_for_action_server(server_timeout_);
+  if(!found)
+  {
+    RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
+                 name().c_str(), prev_action_name_.c_str());
+  }
+  return found;
 }
 
 template<class T> inline
   NodeStatus RosActionNode<T>::tick()
 {
+  // First, check if the action_client_ is valid and that the name of the
+  // action_name in the port didn't change.
+  // otherwise, create a new client
+  if(!action_client_ || (status() == NodeStatus::IDLE && action_name_may_change_))
+  {
+    std::string action_name;
+    getInput("action_name", action_name);
+    if(prev_action_name_ != action_name)
+    {
+      createClient(action_name);
+    }
+  }
+
   auto CheckStatus = [](NodeStatus status)
   {
     if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
@@ -270,7 +319,7 @@ template<class T> inline
       if (rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
-        RCLCPP_WARN( node_->get_logger(), "waiting goal confirmation" );
+        RCLCPP_WARN_ONCE( node_->get_logger(), "waiting goal confirmation" );
         if( (node_->now() - time_goal_sent_) > timeout )
         {
           RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );
@@ -335,7 +384,7 @@ template<class T> inline
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(),
-                 "Failed to cancel action server for %s", action_name_.c_str());
+                 "Failed to cancel action server for %s", prev_action_name_.c_str());
   }
 }
 

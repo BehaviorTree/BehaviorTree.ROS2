@@ -56,13 +56,23 @@ public:
    * @param addition Additional ports to add to BT port list
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedBasicPorts(PortsList addition);
+  static PortsList providedBasicPorts(PortsList addition)
+  {
+    PortsList basic = {
+      InputPort<std::string>("service_name", "Service name")
+    };
+    basic.insert(addition.begin(), addition.end());
+    return basic;
+  }
 
   /**
    * @brief Creates list of BT ports
    * @return PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedPorts();
+  static PortsList providedPorts()
+  {
+    return providedBasicPorts({});
+  }
 
   NodeStatus tick() override final;
 
@@ -92,16 +102,17 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string service_name_;
+  std::string prev_service_name_;
+  bool service_name_may_change_ = false;
   const std::chrono::milliseconds service_timeout_;
 
 private:
 
+  bool createClient(const std::string &service_name);
+
   typename std::shared_ptr<ServiceClient> service_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 
-  // std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
-  // typename GoalHandle::SharedPtr goal_handle_;
   std::shared_future<typename Response::SharedPtr> future_response_;
 
   rclcpp::Time time_request_sent_;
@@ -121,7 +132,6 @@ template<class T> inline
                                   typename std::shared_ptr<ServiceClient> external_service_client):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
-  service_name_(params.server_name),
   service_timeout_(params.server_timeout)
 {
   if( external_service_client )
@@ -130,47 +140,87 @@ template<class T> inline
   }
   else
   {
-    std::string remapped_service_name;
-    if (getInput("server_name", remapped_service_name)) {
-      service_name_ = remapped_service_name;
-    }
-    std::string node_namespace = node_->get_namespace();
-    // Append namespace to the service name
-    if(node_namespace != "/" && service_name_.front() != '/') {
-      service_name_ = node_namespace + "/" + service_name_;
-    }
-    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    const rmw_qos_profile_t& qos_profile{rmw_qos_profile_services_default};
-    service_client_ = node_->create_client<T>(service_name_, qos_profile, callback_group_);
-
-    bool found = service_client_->wait_for_service(service_timeout_);
-    if(!found)
+    // If the content of the port "action_name" is not
+    // a pointer to the blackboard, but a static string, we can
+    // create the client in the constructor.
+    const std::string service_name = config().input_ports.at("service_name");    
+    if(service_name.empty())
     {
-      RCLCPP_ERROR(node_->get_logger(),
-                   "Service [%s] is not reachable. This will be checked only once", service_name_.c_str());
+      if(params.default_server_name.empty())
+      {
+        throw RuntimeError("Both default_server_name  and service_name is empty");
+      }
+      createClient(params.default_server_name);
     }
+    else if(!isBlackboardPointer(service_name))
+    {
+      createClient(service_name);
+    }
+    else {
+      service_name_may_change_ = true;
+    }
+
+
+    // std::string remapped_service_name;
+    // if (getInput("server_name", remapped_service_name)) {
+    //   service_name_ = remapped_service_name;
+    // }
+    // std::string node_namespace = node_->get_namespace();
+    // // Append namespace to the service name
+    // if(node_namespace != "/" && service_name_.front() != '/') {
+    //   service_name_ = node_namespace + "/" + service_name_;
+    // }
+    // callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    // 
+    // service_client_ = node_->create_client<T>(service_name_, qos_profile, callback_group_);
+
+    // bool found = service_client_->wait_for_service(service_timeout_);
+    // if(!found)
+    // {
+    //   RCLCPP_ERROR(node_->get_logger(),
+    //                "Service [%s] is not reachable. This will be checked only once", service_name_.c_str());
+    // }
   }
 }
 
 template<class T> inline
-  PortsList RosServiceNode<T>::providedBasicPorts(PortsList addition)
+  bool RosServiceNode<T>::createClient(const std::string& service_name)
 {
-  PortsList basic = {
-    InputPort<std::string>("server_name", "Service name")
-  };
-  basic.insert(addition.begin(), addition.end());
-  return basic;
-}
+  if(service_name.empty())
+  {
+    throw RuntimeError("service_name is empty");
+  }
+  
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  const rmw_qos_profile_t& qos_profile{rmw_qos_profile_services_default};
+  service_client_ = node_->create_client<T>(service_name, qos_profile, callback_group_);
+  prev_service_name_ = service_name;
 
-template<class T> inline
-  PortsList RosServiceNode<T>::providedPorts()
-{
-  return providedBasicPorts({});
+  bool found = service_client_->wait_for_service(service_timeout_);
+  if(!found)
+  {
+    RCLCPP_ERROR(node_->get_logger(), "%s: Service with name '%s' is not reachable.",
+                 name().c_str(), prev_service_name_.c_str());
+  }
+  return found;
 }
 
 template<class T> inline
   NodeStatus RosServiceNode<T>::tick()
 {
+  // First, check if the service_client_ is valid and that the name of the
+  // service_name in the port didn't change.
+  // otherwise, create a new client
+  if(!service_client_ || (status() == NodeStatus::IDLE && service_name_may_change_))
+  {
+    std::string service_name;
+    getInput("service_name", service_name);
+    if(prev_service_name_ != service_name)
+    {
+      createClient(service_name);
+    }
+  }
+
   auto CheckStatus = [](NodeStatus status)
   {
     if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
@@ -216,7 +266,7 @@ template<class T> inline
       if (rclcpp::spin_until_future_complete(node_, future_response_, nodelay) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
-        RCLCPP_WARN( node_->get_logger(), "waiting response confirmation" );
+        RCLCPP_WARN_ONCE( node_->get_logger(), "waiting response confirmation" );
         if( (node_->now() - time_request_sent_) > timeout )
         {
           RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );

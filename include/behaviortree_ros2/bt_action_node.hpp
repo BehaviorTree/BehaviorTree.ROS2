@@ -17,8 +17,8 @@ struct ActionNodeParams
   // ros node
   std::shared_ptr<rclcpp::Node> nh;
 
-  // You can leave this empty and use the port "action_name"
-  std::string default_action_name;
+  // You can leave this empty and use the port "server_name"
+  std::string default_server_name;
 
   std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
 };
@@ -47,6 +47,7 @@ public:
   // Type definitions
   using ActionType = ActionT;
   using ActionClient = typename rclcpp_action::Client<ActionT>;
+  using ActionClientPtr = std::shared_ptr<ActionClient>;
   using Goal = typename ActionT::Goal;
   using GoalHandle = typename rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
@@ -67,19 +68,28 @@ public:
 
   virtual ~RosActionNode() = default;
 
-  static BT::PortsList providedPorts() {
+  /**
+   * @brief Any subclass of BtActionNode that accepts parameters must provide a
+   * providedPorts method and call providedBasicPorts in it.
+   * @param addition Additional ports to add to BT port list
+   * @return BT::PortsList Containing basic ports along with node-specific ports
+   */
+  static BT::PortsList providedBasicPorts(BT::PortsList addition)
+  {
+    BT::PortsList basic = {
+      BT::InputPort<std::string>("server_name", "__default__placeholder__", "Action server name")
+    };
+    basic.insert(addition.begin(), addition.end());
+    return basic;
+  }
 
-    static auto derived_ports = ActionT::providedPorts();
-    static auto action_port = BT::InputPort<std::string>(
-      "action_name", "", "If not specified, use the default_action_name passed in the constructor");
-
-    if(derived_ports.count("action_name") != 0) {
-      throw LogicError("Port [action_name] already in use");
-    }
-
-    auto merged_ports = derived_ports;
-    merged_ports.insert(action_port);
-    return merged_ports;
+  /**
+   * @brief Creates list of BT ports
+   * @return BT::PortsList Containing basic ports along with node-specific ports
+   */
+  static BT::PortsList providedPorts()
+  {
+    return providedBasicPorts({});
   }
 
   NodeStatus tick() override final;
@@ -121,13 +131,13 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_action_name_;
-  bool action_name_may_change_ = false;
+  std::string prev_server_name_;
+  bool server_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
 
 private:
 
-  typename std::shared_ptr<ActionClient> action_client_;
+  ActionClientPtr action_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
@@ -138,7 +148,7 @@ private:
   bool goal_received_;
   WrappedResult result_;
 
-  bool createClient(const std::string &action_name);
+  bool createClient(const std::string &server_name);
 };
 
 //----------------------------------------------------------------
@@ -159,45 +169,78 @@ template<class T> inline
     action_client_ = external_action_client;
   }
   else {
-    // If the content of the port "action_name" is not
-    // a pointer to the blackboard, but a static string, we can
-    // create the client in the constructor.
-    const std::string action_name = config().input_ports.at("action_name");
-    if(action_name.empty())
+    // Three cases:
+    // - we use the default server_name in ActionNodeParams when port is empty
+    // - we use the server_name in the port and it is a static string.
+    // - we use the server_name in the port and it is blackboard entry.
+
+    // Port must exist, even if empty, since we have a default value at least
+    if(!getInput<std::string>("server_name"))
     {
-      if(params.default_action_name.empty())
-      {
-        throw RuntimeError("Both default_action_name  and action_name is empty");
-      }
-      createClient(params.default_action_name);
+      throw std::logic_error(
+          "Can't find port [server_name]. "
+          "Did you forget to use RosActionNode::providedBasicPorts() "
+          "in your derived class?");
     }
-    else if(!isBlackboardPointer(action_name))
+
+    // check port remapping
+    auto portIt = config().input_ports.find("server_name");
+    if(portIt != config().input_ports.end())
     {
-      createClient(action_name);
+      const std::string& bb_server_name = portIt->second;
+
+      if(bb_server_name.empty() || bb_server_name == "__default__placeholder__")
+      {
+        if(params.default_server_name.empty()) {
+          throw std::logic_error(
+            "Both [server_name] in the InputPort and the ActionNodeParams are empty.");
+        }
+        else {
+          createClient(params.default_server_name);
+        }
+      }
+      else if(!isBlackboardPointer(bb_server_name))
+      {
+        // If the content of the port "server_name" is not
+        // a pointer to the blackboard, but a static string, we can
+        // create the client in the constructor.
+        createClient(bb_server_name);
+      }
+      else {
+        server_name_may_change_ = true;
+        // createClient will be invoked in the first tick().
+      }
     }
     else {
-      action_name_may_change_ = true;
+
+      if(params.default_server_name.empty()) {
+        throw std::logic_error(
+          "Both [server_name] in the InputPort and the ActionNodeParams are empty.");
+      }
+      else {
+        createClient(params.default_server_name);
+      }
     }
   }
 }
 
 template<class T> inline
-  bool RosActionNode<T>::createClient(const std::string& action_name)
+  bool RosActionNode<T>::createClient(const std::string& server_name)
 {
-  if(action_name.empty())
+  if(server_name.empty())
   {
-    throw RuntimeError("action_name is empty");
+    throw RuntimeError("server_name is empty");
   }
 
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
-  prev_action_name_ = action_name;
+  action_client_ = rclcpp_action::create_client<T>(node_, server_name, callback_group_);
+  prev_server_name_ = server_name;
 
   bool found = action_client_->wait_for_action_server(server_timeout_);
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
-                 name().c_str(), prev_action_name_.c_str());
+                 name().c_str(), prev_server_name_.c_str());
   }
   return found;
 }
@@ -207,15 +250,15 @@ template<class T> inline
   NodeStatus RosActionNode<T>::tick()
 {
   // First, check if the action_client_ is valid and that the name of the
-  // action_name in the port didn't change.
+  // server_name in the port didn't change.
   // otherwise, create a new client
-  if(!action_client_ || (status() == NodeStatus::IDLE && action_name_may_change_))
+  if(!action_client_ || (status() == NodeStatus::IDLE && server_name_may_change_))
   {
-    std::string action_name;
-    getInput("action_name", action_name);
-    if(prev_action_name_ != action_name)
+    std::string server_name;
+    getInput("server_name", server_name);
+    if(prev_server_name_ != server_name)
     {
-      createClient(action_name);
+      createClient(server_name);
     }
   }
 
@@ -366,7 +409,7 @@ template<class T> inline
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
-                 prev_action_name_.c_str());
+                 prev_server_name_.c_str());
   }
 }
 

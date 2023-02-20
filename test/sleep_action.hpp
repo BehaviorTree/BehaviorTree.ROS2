@@ -15,7 +15,7 @@ public:
 
   static BT::PortsList providedPorts()
   {
-    return {InputPort<unsigned>("msec")};
+    return providedBasicPorts({InputPort<unsigned>("msec")});
   }
 
   bool setGoal(Goal& goal) override;

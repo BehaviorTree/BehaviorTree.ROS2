@@ -1,5 +1,5 @@
 
-rosidl_generate_interfaces(sleep_interface
+rosidl_generate_interfaces(behaviortree_ros2
     "../action/Sleep.action")
 
 # macro to remove some boiler plate
@@ -7,7 +7,7 @@ function(add_target_dependencies target)
     target_include_directories(${target} PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
     ament_target_dependencies(${target} ${THIS_PACKAGE_INCLUDE_DEPENDS})
-    rosidl_target_interfaces(${target} sleep_interface "rosidl_typesupport_cpp")
+    rosidl_target_interfaces(${target} behaviortree_ros2 "rosidl_typesupport_cpp")
 endfunction()
 
 ######################################################

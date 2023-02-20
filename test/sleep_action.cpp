@@ -10,17 +10,16 @@ bool SleepAction::setGoal(RosActionNode::Goal &goal)
 
 NodeStatus SleepAction::onResultReceived(const RosActionNode::WrappedResult &wr)
 {
-  RCLCPP_INFO( node_->get_logger(), "onResultReceived %d", wr.result->done );
+  RCLCPP_INFO( node_->get_logger(), "%s: onResultReceived %d", name().c_str(), wr.result->done );
   return wr.result->done ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
 }
 
 NodeStatus SleepAction::onFailure(ActionNodeErrorCode error)
 {
-  RCLCPP_ERROR( node_->get_logger(), "onFailure %d", error );
+  RCLCPP_ERROR( node_->get_logger(), "%s: onFailure %d", name().c_str(), error );
   return NodeStatus::FAILURE;
 }
 
 // Plugin registration.
-// The class SleepAction will self register with name  "Sleep"
-// and, by default, it will connect to the "sleep_service".
-RegisterROSActionNode(SleepAction, "Sleep", "sleep_service");
+// The class SleepAction will self register with name  "Sleep".
+RegisterROSActionNode(SleepAction, "Sleep");

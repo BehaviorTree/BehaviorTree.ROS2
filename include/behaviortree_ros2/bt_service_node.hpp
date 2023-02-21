@@ -59,7 +59,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("service_name", "Service name")
+      InputPort<std::string>("service_name", "default", "Service name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -112,6 +112,7 @@ private:
 
   typename std::shared_ptr<ServiceClient> service_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
+  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
   std::shared_future<typename Response::SharedPtr> future_response_;
 
@@ -139,12 +140,14 @@ template<class T> inline
     service_client_ = external_service_client;
   }
   else
-  {
+  { 
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
     // If the content of the port "action_name" is not
     // a pointer to the blackboard, but a static string, we can
     // create the client in the constructor.
     const std::string service_name = config().input_ports.at("service_name");    
-    if(service_name.empty())
+    if(service_name == "default")
     {
       if(params.default_server_name.empty())
       {
@@ -159,27 +162,6 @@ template<class T> inline
     else {
       service_name_may_change_ = true;
     }
-
-
-    // std::string remapped_service_name;
-    // if (getInput("server_name", remapped_service_name)) {
-    //   service_name_ = remapped_service_name;
-    // }
-    // std::string node_namespace = node_->get_namespace();
-    // // Append namespace to the service name
-    // if(node_namespace != "/" && service_name_.front() != '/') {
-    //   service_name_ = node_namespace + "/" + service_name_;
-    // }
-    // callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    // 
-    // service_client_ = node_->create_client<T>(service_name_, qos_profile, callback_group_);
-
-    // bool found = service_client_->wait_for_service(service_timeout_);
-    // if(!found)
-    // {
-    //   RCLCPP_ERROR(node_->get_logger(),
-    //                "Service [%s] is not reachable. This will be checked only once", service_name_.c_str());
-    // }
   }
 }
 
@@ -190,8 +172,6 @@ template<class T> inline
   {
     throw RuntimeError("service_name is empty");
   }
-  
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   const rmw_qos_profile_t& qos_profile{rmw_qos_profile_services_default};
   service_client_ = node_->create_client<T>(service_name, qos_profile, callback_group_);
   prev_service_name_ = service_name;
@@ -255,7 +235,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    rclcpp::spin_some(node_);
+    callback_group_executor_.spin_some();
 
     // FIRST case: check if the goal request has a timeout
     if( !response_received_ )
@@ -263,7 +243,10 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(service_timeout_.count()) / 1000);
 
-      if (rclcpp::spin_until_future_complete(node_, future_response_, nodelay) !=
+      // if (rclcpp::spin_until_future_complete(node_, future_response_, nodelay) !=
+      //     rclcpp::FutureReturnCode::SUCCESS)
+      // {
+      if (callback_group_executor_.spin_until_future_complete(future_response_, service_timeout_) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
         RCLCPP_WARN_ONCE( node_->get_logger(), "waiting response confirmation" );

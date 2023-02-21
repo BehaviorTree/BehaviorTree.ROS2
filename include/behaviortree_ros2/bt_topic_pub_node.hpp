@@ -1,5 +1,5 @@
-#ifndef BEHAVIOR_TREE_ROS2__BT_TOPIC_NODE_HPP_
-#define BEHAVIOR_TREE_ROS2__BT_TOPIC_NODE_HPP_
+#ifndef BEHAVIOR_TREE_ROS2__BT_TOPIC_PUB_NODE_HPP_
+#define BEHAVIOR_TREE_ROS2__BT_TOPIC_PUB_NODE_HPP_
 
 #include <memory>
 #include <string>
@@ -19,12 +19,12 @@ namespace BT
  * The derived class whould reimplement the virtual methods as described below.
  */
 template<class TopicT>
-class RosTopicNode : public BT::ConditionNode
+class RosTopicPubNode : public BT::ConditionNode
 {
 
 public:
   // Type definitions
-  using Subscriber = typename rclcpp::Subscription<TopicT>;
+  using Publisher = typename rclcpp::Publisher<TopicT>;
 
   /** You are not supposed to instantiate this class directly, the factory will do it.
    * To register this class into the factory, use:
@@ -33,11 +33,11 @@ public:
    *
    * Note that if the external_action_client is not set, the constructor will build its own.
    * */
-  explicit RosTopicNode(const std::string & instance_name,
+  explicit RosTopicPubNode(const std::string & instance_name,
                          const BT::NodeConfig& conf,
                          const NodeParams& params);
 
-  virtual ~RosTopicNode() = default;
+  virtual ~RosTopicPubNode() = default;
 
   /**
    * @brief Any subclass of BtActionNode that accepts parameters must provide a
@@ -65,22 +65,7 @@ public:
 
   NodeStatus tick() override final;
 
-  /** topicCallback is a callback invoked when a message is received.
-   */
-  void topicCallback(const std::shared_ptr<TopicT> msg);
-
-  /** Callback invoked when a message is received.
-   * It is up to the user to define if the BT::action returns SUCCESS or FAILURE.
-   */
-  virtual BT::NodeStatus onMessageReceived(const typename TopicT::SharedPtr& last_msg) = 0;
-
-  /** Callback invoked when a message is not received.
-   * It is up to the user to define if the BT::action returns SUCCESS or FAILURE.
-   */
-  virtual BT::NodeStatus onMessageNotReceived()
-  {
-    return BT::NodeStatus::FAILURE;
-  }
+  virtual bool setMessage(TopicT& msg) = 0;
 
 protected:
 
@@ -90,13 +75,9 @@ protected:
 
 private:
 
-  bool createSubscriber(const std::string& topic_name);
+  bool createPublisher(const std::string& topic_name);
 
-  std::shared_ptr<Subscriber> subscriber_;
-  typename TopicT::SharedPtr last_msg_;
-  bool is_message_received_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
+  std::shared_ptr<Publisher> publisher_;
 };
 
 //----------------------------------------------------------------
@@ -104,7 +85,7 @@ private:
 //----------------------------------------------------------------
 
 template<class T> inline
-  RosTopicNode<T>::RosTopicNode(const std::string & instance_name,
+  RosTopicPubNode<T>::RosTopicPubNode(const std::string & instance_name,
                                   const NodeConfig &conf,
                                   const NodeParams& params)
     : BT::ConditionNode(instance_name, conf),
@@ -120,11 +101,11 @@ template<class T> inline
     {
       throw RuntimeError("Both default_server_name  and topic_name is empty");
     }
-    createSubscriber(params.default_server_name);
+    createPublisher(params.default_server_name);
   }
   else if(!isBlackboardPointer(topic_name))
   {
-    createSubscriber(topic_name);
+    createPublisher(topic_name);
   }
   else {
     topic_name_may_change_ = true;
@@ -132,60 +113,43 @@ template<class T> inline
 }
 
 template<class T> inline
-  bool RosTopicNode<T>::createSubscriber(const std::string& topic_name)
+  bool RosTopicPubNode<T>::createPublisher(const std::string& topic_name)
 {
   if(topic_name.empty())
   {
     throw RuntimeError("topic_name is empty");
   }
   
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  rclcpp::SubscriptionOptions sub_option;
-  sub_option.callback_group = callback_group_;
-  subscriber_ = node_->create_subscription<T>(topic_name, 1, std::bind(&RosTopicNode::topicCallback, this, std::placeholders::_1), sub_option);
+  publisher_ = node_->create_publisher<T>(topic_name, 1);
   prev_topic_name_ = topic_name;
   return true;
 }
 
 template<class T> inline
-  void RosTopicNode<T>::topicCallback(const std::shared_ptr<T> msg)
-{
-  last_msg_ = msg;
-}
-
-template<class T> inline
-  NodeStatus RosTopicNode<T>::tick()
+  NodeStatus RosTopicPubNode<T>::tick()
 {
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber
-  if(!subscriber_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
+  if(!publisher_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
   {
     std::string topic_name;
     getInput("topic_name", topic_name);
     if(prev_topic_name_ != topic_name)
     {
-      createSubscriber(topic_name);
+      createPublisher(topic_name);
     }
   }
 
-  auto CheckStatus = [](NodeStatus status)
+  T msg;
+  if (!setMessage(msg))
   {
-    if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
-    {
-      throw std::logic_error("RosTopicNode: the callback must return either SUCCESS or FAILURE");
-    }
-    return status;
-  };
-  last_msg_ = nullptr;
-  callback_group_executor_.spin_some();
-  if (last_msg_) {
-    return CheckStatus (onMessageReceived(last_msg_));
+    return NodeStatus::FAILURE;
   }
-  return CheckStatus (onMessageNotReceived());
+  publisher_->publish(msg);
+  return NodeStatus::SUCCESS;
 }
 
 }  // namespace BT
 
-#endif  // BEHAVIOR_TREE_ROS2__BT_TOPIC_NODE_HPP_
+#endif  // BEHAVIOR_TREE_ROS2__BT_TOPIC_PUB_NODE_HPP_

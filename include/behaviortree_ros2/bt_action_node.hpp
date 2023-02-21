@@ -66,7 +66,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("action_name", "Action server name")
+      InputPort<std::string>("action_name", "default", "Action server name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -131,6 +131,7 @@ private:
 
   typename std::shared_ptr<ActionClient> action_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
+  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
@@ -153,18 +154,20 @@ template<class T> inline
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
   server_timeout_(params.server_timeout)
-{
+{ 
   if( external_action_client )
   {
     action_client_ = external_action_client;
   }
   else
   {
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
     // If the content of the port "action_name" is not
     // a pointer to the blackboard, but a static string, we can
     // create the client in the constructor.
-    const std::string action_name = config().input_ports.at("action_name");    
-    if(action_name.empty())
+    const std::string action_name = config().input_ports.at("action_name");
+    if(action_name == "default")
     {
       if(params.default_server_name.empty())
       {
@@ -179,25 +182,6 @@ template<class T> inline
     else {
       action_name_may_change_ = true;
     }
-
-    // std::string remapped_action_name;
-    // if (getInput("action_name", remapped_action_name)) {
-    //   action_name_ = remapped_action_name;
-    // }
-    // std::string node_namespace = node_->get_namespace();
-    // // Append namespace to the action name
-    // if(node_namespace != "/") {
-    //   action_name_ = node_namespace + "/" + action_name_;
-    // }
-    // callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    // action_client_ = rclcpp_action::create_client<T>(node_, action_name_, callback_group_);
-
-    // bool found = action_client_->wait_for_action_server(server_timeout_);
-    // if(!found)
-    // {
-    //   RCLCPP_ERROR(node_->get_logger(),
-    //                "Action server [%s] is not reachable. This will be checked only once", action_name_.c_str());
-    // }
   }
 }
 
@@ -208,8 +192,6 @@ template<class T> inline
   {
     throw RuntimeError("action_name is empty");
   }
-  
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
   prev_action_name_ = action_name;
 
@@ -233,7 +215,7 @@ template<class T> inline
     std::string action_name;
     getInput("action_name", action_name);
     if(prev_action_name_ != action_name)
-    {
+    { 
       createClient(action_name);
     }
   }
@@ -282,7 +264,7 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_INFO( node_->get_logger(), "result_callback" );
+      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
       result_ = result;
       emitWakeUpSignal();
     };
@@ -308,7 +290,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    rclcpp::spin_some(node_);
+    callback_group_executor_.spin_some();
 
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
@@ -316,7 +298,10 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      if (rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay) !=
+      // if (rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay) !=
+      //     rclcpp::FutureReturnCode::SUCCESS)
+      // {
+      if (callback_group_executor_.spin_until_future_complete(future_goal_handle_, server_timeout_) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
         RCLCPP_WARN_ONCE( node_->get_logger(), "waiting goal confirmation" );

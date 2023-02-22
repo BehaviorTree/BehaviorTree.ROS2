@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_HPP_
-#define BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_HPP_
+#ifndef BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_OLD_HPP_
+#define BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_OLD_HPP_
 
 #include <memory>
 #include <string>
@@ -97,4 +97,4 @@ protected:
 
 }  // namespace BT
 
-#endif // BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_HPP_
+#endif // BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_OLD_HPP_

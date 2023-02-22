@@ -252,7 +252,6 @@ template<class T> inline
         RCLCPP_WARN_ONCE( node_->get_logger(), "waiting response confirmation" );
         if( (node_->now() - time_request_sent_) > timeout )
         {
-          RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );
           return CheckStatus( onFailure(SERVICE_TIMEOUT) );
         }
         else{

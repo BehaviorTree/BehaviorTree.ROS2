@@ -307,7 +307,6 @@ template<class T> inline
         RCLCPP_WARN_ONCE( node_->get_logger(), "waiting goal confirmation" );
         if( (node_->now() - time_goal_sent_) > timeout )
         {
-          RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );
           return CheckStatus( onFailure(SEND_GOAL_TIMEOUT) );
         }
         else{

@@ -47,7 +47,7 @@ public:
    * @brief A constructor for nav2_behavior_tree::BehaviorTreeEngine
    * @param plugin_libraries vector of BT plugin library names to load
    */
-  explicit BehaviorTreeEngine(const std::vector<std::string> & plugin_libraries);
+  explicit BehaviorTreeEngine(const std::string& name, const std::vector<std::string> & plugin_libraries);
   virtual ~BehaviorTreeEngine() {}
 
   /**

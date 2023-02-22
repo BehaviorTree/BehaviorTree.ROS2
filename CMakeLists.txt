@@ -101,6 +101,13 @@ ament_target_dependencies(behavior_tree_engine
   ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
 
+add_library(behavior_tree_engine_old SHARED
+  src/behavior_tree_engine_old.cpp
+)
+ament_target_dependencies(behavior_tree_engine_old
+  ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+
 add_library(pipeline_sequence_bt_node SHARED plugins/control/pipeline_sequence.cpp)
 list(APPEND plugin_libs pipeline_sequence_bt_node)
 
@@ -119,6 +126,7 @@ install(
 
 install(TARGETS 
   behavior_tree_engine
+  behavior_tree_engine_old
   ${plugin_libs}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -128,6 +136,7 @@ install(TARGETS
 
 ament_export_libraries(
   behavior_tree_engine
+  behavior_tree_engine_old
   ${plugin_libs}
 )
 

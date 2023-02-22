@@ -19,7 +19,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/behavior_tree.h"
 #include "behaviortree_cpp/bt_factory.h"
@@ -64,20 +63,6 @@ public:
     std::function<bool()> cancelRequested,
     std::chrono::milliseconds loopTimeout = std::chrono::milliseconds(10));
 
-  void registerTreesFromDirectory(const std::string & search_directory);
-
-  void registerTreeFromFile(const std::string & file_path);
-
-  void registerTreeFromText(const std::string & xml_string);
-
-  template<typename T>
-  void registerEnums()
-  {
-    factory_.registerScriptingEnums<T>();
-  }
-
-  Tree createTree(const std::string & tree_id, Blackboard::Ptr blackboard);
-
   /**
    * @brief Function to create a BT from a XML string
    * @param xml_string XML string representing BT
@@ -108,9 +93,8 @@ protected:
   // The factory that will be used to dynamically construct the behavior tree
   BehaviorTreeFactory factory_;
   std::unique_ptr<PublisherZMQ> groot_monitor_;
-  std::shared_ptr<rclcpp::Node> node_;
 };
 
 }  // namespace BT
 
-#endif  // BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_HPP_
+#endif // BEHAVIOR_TREE_ROS2__BEHAVIOR_TREE_ENGINE_HPP_

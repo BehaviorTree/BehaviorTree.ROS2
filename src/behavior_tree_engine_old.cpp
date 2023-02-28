@@ -14,33 +14,23 @@
 // limitations under the License.
 
 
-#include <filesystem>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
+#include <rclcpp/rclcpp.hpp>
 
 #include "behaviortree_cpp/utils/shared_library.h"
-#include "behaviortree_ros2/behavior_tree_engine.hpp"
-#include "behaviortree_ros2/plugins.hpp"
+#include "behaviortree_ros2/behavior_tree_engine_old.hpp"
 
 namespace BT
 {
 
-BehaviorTreeEngine::BehaviorTreeEngine(const std::string& name, const std::vector<std::string> & plugin_libraries) 
-  : node_(rclcpp::Node::make_shared(name, rclcpp::NodeOptions().arguments({
-    "--ros-args", "-r", name + ":" + std::string("__node:=") + name
-  })))
+BehaviorTreeEngine::BehaviorTreeEngine(const std::vector<std::string> & plugin_libraries)
 {
   SharedLibrary loader;
   for (const auto & p : plugin_libraries) {
-    RegisterRosBTNode(factory_, loader.getOSName(p), node_);
+    factory_.registerFromPlugin(loader.getOSName(p));
   }
-  std::string tree_model = writeTreeNodesModelXML(factory_);
-  std::ofstream xml_file;
-  xml_file.open("/tree_model.xml");
-  xml_file << tree_model;
-  xml_file.close();
 }
 
 BtStatus
@@ -75,37 +65,6 @@ BehaviorTreeEngine::run(
   }
 
   return (result == NodeStatus::SUCCESS) ? BtStatus::SUCCEEDED : BtStatus::FAILED;
-}
-
-void
-BehaviorTreeEngine::registerTreesFromDirectory(const std::string & search_directory)
-{
-  using std::filesystem::directory_iterator;
-  for (auto const& entry : directory_iterator(search_directory)) 
-  {
-    if( entry.path().extension() == ".xml")
-    {
-      factory_.registerBehaviorTreeFromFile(entry.path().string());
-    }
-  }
-}
-
-void
-BehaviorTreeEngine::registerTreeFromFile(const std::string & file_path)
-{
-  factory_.registerBehaviorTreeFromFile(file_path);
-}
-
-void
-BehaviorTreeEngine::registerTreeFromText(const std::string & xml_string)
-{
-  factory_.registerBehaviorTreeFromText(xml_string);
-}
-
-Tree
-BehaviorTreeEngine::createTree(const std::string & tree_id, Blackboard::Ptr blackboard)
-{
-  return factory_.createTree(tree_id, blackboard);
 }
 
 Tree

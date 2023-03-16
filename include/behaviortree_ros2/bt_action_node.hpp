@@ -37,6 +37,7 @@ public:
   // Type definitions
   using ActionType = ActionT;
   using ActionClient = typename rclcpp_action::Client<ActionT>;
+  using ActionClientPtr = std::shared_ptr<ActionClient>;
   using Goal = typename ActionT::Goal;
   using GoalHandle = typename rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
@@ -61,12 +62,12 @@ public:
    * @brief Any subclass of BtActionNode that accepts parameters must provide a
    * providedPorts method and call providedBasicPorts in it.
    * @param addition Additional ports to add to BT port list
-   * @return PortsList Containing basic ports along with node-specific ports
+   * @return BT::PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedBasicPorts(PortsList addition)
+  static BT::PortsList providedBasicPorts(BT::PortsList addition)
   {
-    PortsList basic = {
-      InputPort<std::string>("action_name", "default", "Action server name")
+    BT::PortsList basic = {
+      BT::InputPort<std::string>("action_name", "__default__placeholder__", "Action server name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -74,9 +75,10 @@ public:
 
   /**
    * @brief Creates list of BT ports
-   * @return PortsList Containing basic ports along with node-specific ports
+   * @return BT::PortsList Containing basic ports along with node-specific ports
    */
-  static PortsList providedPorts(){
+  static BT::PortsList providedPorts()
+  {
     return providedBasicPorts({});
   }
 
@@ -127,9 +129,7 @@ protected:
 
 private:
 
-  bool createClient(const std::string &action_name);
-
-  typename std::shared_ptr<ActionClient> action_client_;
+  ActionClientPtr action_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
@@ -140,6 +140,8 @@ private:
   NodeStatus on_feedback_state_change_;
   bool goal_received_;
   WrappedResult result_;
+
+  bool createClient(const std::string &server_name);
 };
 
 //----------------------------------------------------------------
@@ -159,28 +161,59 @@ template<class T> inline
   {
     action_client_ = external_action_client;
   }
-  else
-  {
-    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-    // If the content of the port "action_name" is not
-    // a pointer to the blackboard, but a static string, we can
-    // create the client in the constructor.
-    const std::string action_name = config().input_ports.at("action_name");
-    if(action_name == "default")
+  else {
+     callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+    // Three cases:
+    // - we use the default action_name in ActionNodeParams when port is empty
+    // - we use the action_name in the port and it is a static string.
+    // - we use the action_name in the port and it is blackboard entry.
+
+    // Port must exist, even if empty, since we have a default value at least
+    if(!getInput<std::string>("action_name"))
     {
-      if(params.default_server_name.empty())
-      {
-        throw RuntimeError("Both default_server_name  and action_name is empty");
-      }
-      createClient(params.default_server_name);
+      throw std::logic_error(
+          "Can't find port [action_name]. "
+          "Did you forget to use RosActionNode::providedBasicPorts() "
+          "in your derived class?");
     }
-    else if(!isBlackboardPointer(action_name))
+
+    // check port remapping
+    auto portIt = config().input_ports.find("action_name");
+    if(portIt != config().input_ports.end())
     {
-      createClient(action_name);
+      const std::string& bb_action_name = portIt->second;
+
+      if(bb_action_name.empty() || bb_action_name == "__default__placeholder__")
+      {
+        if(params.default_action_name.empty()) {
+          throw std::logic_error(
+            "Both [action_name] in the InputPort and the ActionNodeParams are empty.");
+        }
+        else {
+          createClient(params.default_action_name);
+        }
+      }
+      else if(!isBlackboardPointer(bb_action_name))
+      {
+        // If the content of the port "action_name" is not
+        // a pointer to the blackboard, but a static string, we can
+        // create the client in the constructor.
+        createClient(bb_action_name);
+      }
+      else {
+        action_name_may_change_ = true;
+        // createClient will be invoked in the first tick().
+      }
     }
     else {
-      action_name_may_change_ = true;
+
+      if(params.default_action_name.empty()) {
+        throw std::logic_error(
+          "Both [action_name] in the InputPort and the ActionNodeParams are empty.");
+      }
+      else {
+        createClient(params.default_action_name);
+      }
     }
   }
 }
@@ -192,6 +225,8 @@ template<class T> inline
   {
     throw RuntimeError("action_name is empty");
   }
+
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
   prev_action_name_ = action_name;
 
@@ -215,11 +250,12 @@ template<class T> inline
     std::string action_name;
     getInput("action_name", action_name);
     if(prev_action_name_ != action_name)
-    { 
+    {
       createClient(action_name);
     }
   }
 
+  //------------------------------------------
   auto CheckStatus = [](NodeStatus status)
   {
     if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
@@ -298,9 +334,6 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      // if (rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay) !=
-      //     rclcpp::FutureReturnCode::SUCCESS)
-      // {
       if (callback_group_executor_.spin_until_future_complete(future_goal_handle_, server_timeout_) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
@@ -364,11 +397,11 @@ template<class T> inline
 {
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
 
-  if (rclcpp::spin_until_future_complete(node_, future_cancel, server_timeout_) !=
+  if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
-    RCLCPP_ERROR( node_->get_logger(),
-                 "Failed to cancel action server for %s", prev_action_name_.c_str());
+    RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
+                 prev_action_name_.c_str());
   }
 }
 

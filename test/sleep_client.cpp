@@ -33,7 +33,7 @@ public:
   }
 
   static BT::PortsList providedPorts() {
-    return{ BT::InputPort<std::string>("message") };
+    return { BT::InputPort<std::string>("message") };
   }
 };
 
@@ -41,15 +41,15 @@ public:
 
   // Simple tree, used to execute once each action.
   static const char* xml_text = R"(
- <root >
+ <root BTCPP_format="4">
      <BehaviorTree>
         <Sequence>
             <PrintValue message="start"/>
-            <Sleep msec="2000"/>
+            <Sleep name="sleepA" msec="2000"/>
             <PrintValue message="sleep completed"/>
             <Fallback>
-                <Timeout msec="500">
-                   <Sleep msec="1000"/>
+                <Timeout msec="1500">
+                   <Sleep name="sleepB" server_name="sleep_service" msec="2000"/>
                 </Timeout>
                 <PrintValue message="sleep aborted"/>
             </Fallback>
@@ -67,12 +67,13 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-#ifdef USE_SLEEP_PLUGIN
-  // RegisterRosActionNode(factory, "../lib/libsleep_action_plugin.so", nh);
-#else
-  ActionNodeParams params;
+  BT::ActionNodeParams params;
   params.nh = nh;
-  params.action_name = "sleep_service";
+  params.default_server_name = "sleep_service";
+
+#ifdef USE_SLEEP_PLUGIN
+  RegisterRosActionNode(factory, "../lib/libsleep_action_plugin.so", params);
+#else
   factory.registerNodeType<SleepAction>("Sleep", params);
 #endif
 

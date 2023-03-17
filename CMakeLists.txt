@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+######################################################
+
 set(THIS_PACKAGE_INCLUDE_DEPENDS
     rclcpp
     rclcpp_action
@@ -16,46 +18,74 @@ find_package(rclcpp REQUIRED )
 find_package(rclcpp_action REQUIRED )
 find_package(behaviortree_cpp REQUIRED )
 find_package(ament_index_cpp REQUIRED)
+
 find_package(rosidl_default_generators REQUIRED)
 
-######################################################
-rosidl_generate_interfaces(${PROJECT_NAME}
-    "action/Sleep.action")
+# rosidl_generate_interfaces(${PROJECT_NAME}
+#   "action/Sleep.action"
+# )
 
-# macro to remove some boiler plate
-function(add_target_dependencies target)
-    target_include_directories(${target} PRIVATE
-        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
-    ament_target_dependencies(${target} ${THIS_PACKAGE_INCLUDE_DEPENDS})
-    rosidl_target_interfaces(${target} ${PROJECT_NAME} "rosidl_typesupport_cpp")
-endfunction()
 
-######################################################
-# Compile Sleep library as static dependeny or plugin
+# ######################################################
 
-add_library(sleep_plugin SHARED test/sleep_action.cpp)
-target_compile_definitions(sleep_plugin PRIVATE  BT_PLUGIN_EXPORT )
-add_target_dependencies(sleep_plugin)
+# ######################################################
+# # TESTS
 
-add_library(sleep_static STATIC test/sleep_action.cpp)
-add_target_dependencies(sleep_static)
+# add_executable(sleep_server test/sleep_server.cpp)
+# target_include_directories(sleep_server PRIVATE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# ament_target_dependencies(sleep_server
+#   ${THIS_PACKAGE_INCLUDE_DEPENDS}
+# )
+# # rosidl_target_interfaces(sleep_server ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# target_link_libraries(sleep_server ${cpp_typesupport_target})
 
-######################################################
-# Build two clients, one that use the plugin and the other
-# that links statically
+# ######################################################
+# # Decide if Sleep action should be a plugin or not
 
-add_executable(sleep_client_dyn test/sleep_client.cpp)
-target_compile_definitions(sleep_client_dyn PRIVATE USE_SLEEP_PLUGIN )
-add_target_dependencies(sleep_client_dyn)
+# set(SLEEP_PLUGIN 0) # set to 1 to make it a plugin
 
-add_executable(sleep_client test/sleep_client.cpp)
-target_link_libraries(sleep_client sleep_static )
-add_target_dependencies(sleep_client)
+# if(SLEEP_PLUGIN)
+#     set(LIBRARY_TYPE SHARED)
+# else()
+#     set(LIBRARY_TYPE STATIC)
+# endif()
 
-######################################################
-# Build Server
-add_executable(sleep_server test/sleep_server.cpp)
-add_target_dependencies(sleep_server)
+# add_library(sleep_action ${LIBRARY_TYPE} test/sleep_action.cpp)
+# target_include_directories(sleep_action PRIVATE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+# ament_target_dependencies(sleep_action ${THIS_PACKAGE_INCLUDE_DEPENDS})
+# # rosidl_target_interfaces(sleep_action ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# target_link_libraries(sleep_action ${cpp_typesupport_target})
+
+# if(SLEEP_PLUGIN)
+#     target_compile_definitions(sleep_action PRIVATE  BT_PLUGIN_EXPORT )
+# endif()
+
+# ######################################################
+# # Build Executable
+# add_executable(test_client test/test_client.cpp)
+# if(SLEEP_PLUGIN)
+#      target_compile_definitions(test_client PRIVATE USE_SLEEP_PLUGIN )
+# else()
+#     target_link_libraries(test_client sleep_action )
+# endif()
+# target_include_directories(test_client PRIVATE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# ament_target_dependencies(test_client
+#   ${THIS_PACKAGE_INCLUDE_DEPENDS}
+# )
+# # rosidl_target_interfaces(test_client ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# target_link_libraries(test_client ${cpp_typesupport_target})
+
+#add_executable(test_server test/test_server.cpp)
+#add_dependencies(test_server ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#target_link_libraries(test_server ${catkin_LIBRARIES} )
 
 ######################################################
 # UMD STUFF
@@ -114,10 +144,9 @@ ament_export_libraries(
 # INSTALL
 
 install(TARGETS
-  sleep_client
-  sleep_client_dyn
-  sleep_server
-  sleep_plugin
+  # sleep_server
+  # test_client
+  # sleep_action
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -128,10 +157,10 @@ install(
   DESTINATION include
 )
 
+######################################################
+
 ament_export_include_directories(include)
-
-ament_export_dependencies(behaviortree_cpp rosidl_default_runtime)
-
+ament_export_dependencies(${THIS_PACKAGE_INCLUDE_DEPENDS})
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()
-
 

@@ -164,7 +164,7 @@ template<class T> inline
   else {
      callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
     // Three cases:
-    // - we use the default action_name in ActionNodeParams when port is empty
+    // - we use the default action_name in NodeParams when port is empty
     // - we use the action_name in the port and it is a static string.
     // - we use the action_name in the port and it is blackboard entry.
 
@@ -185,12 +185,12 @@ template<class T> inline
 
       if(bb_action_name.empty() || bb_action_name == "__default__placeholder__")
       {
-        if(params.default_action_name.empty()) {
+        if(params.default_server_name.empty()) {
           throw std::logic_error(
-            "Both [action_name] in the InputPort and the ActionNodeParams are empty.");
+            "Both [action_name] in the InputPort and the NodeParams are empty.");
         }
         else {
-          createClient(params.default_action_name);
+          createClient(params.default_server_name);
         }
       }
       else if(!isBlackboardPointer(bb_action_name))
@@ -207,12 +207,12 @@ template<class T> inline
     }
     else {
 
-      if(params.default_action_name.empty()) {
+      if(params.default_server_name.empty()) {
         throw std::logic_error(
-          "Both [action_name] in the InputPort and the ActionNodeParams are empty.");
+          "Both [action_name] in the InputPort and the NodeParams are empty.");
       }
       else {
-        createClient(params.default_action_name);
+        createClient(params.default_server_name);
       }
     }
   }

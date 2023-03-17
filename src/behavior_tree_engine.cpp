@@ -23,18 +23,30 @@
 #include "behaviortree_cpp/utils/shared_library.h"
 #include "behaviortree_ros2/behavior_tree_engine.hpp"
 #include "behaviortree_ros2/plugins.hpp"
+#include "behaviortree_ros2/node_params.hpp"
 
 namespace BT
 {
 
-BehaviorTreeEngine::BehaviorTreeEngine(const std::string& name, const std::vector<std::string> & plugin_libraries) 
+BehaviorTreeEngine::BehaviorTreeEngine(const std::string& name, const std::vector<std::string> & plugin_libraries, const std::vector<std::string> & default_server_names) 
   : node_(rclcpp::Node::make_shared(name, rclcpp::NodeOptions().arguments({
     "--ros-args", "-r", name + ":" + std::string("__node:=") + name
   })))
 {
   SharedLibrary loader;
-  for (const auto & p : plugin_libraries) {
-    RegisterRosBTNode(factory_, loader.getOSName(p), node_);
+  NodeParams params;
+  params.nh = node_;
+  bool use_default_server_names = default_server_names.size() == plugin_libraries.size();
+  if (!use_default_server_names) {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("BehaviorTreeEngine"),
+      "Number of default server names does not match number of plugin libraries. Ignoring values...");
+  }
+  for (size_t i = 0; i < plugin_libraries.size(); i++) {
+    if (use_default_server_names) {
+      params.default_server_name = default_server_names[i];
+    }
+    RegisterRosBTNode(factory_, loader.getOSName(plugin_libraries[i]), params);
   }
   std::string tree_model = writeTreeNodesModelXML(factory_);
   std::ofstream xml_file;

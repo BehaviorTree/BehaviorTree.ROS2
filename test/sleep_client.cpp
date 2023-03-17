@@ -3,6 +3,7 @@
 #include <rclcpp/executors.hpp>
 
 #include "behaviortree_ros2/plugins.hpp"
+#include "behaviortree_ros2/node_params.hpp"
 
 #ifndef USE_SLEEP_PLUGIN
 #include "sleep_action.hpp"
@@ -67,12 +68,12 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-  BT::ActionNodeParams params;
+  BT::NodeParams params;
   params.nh = nh;
   params.default_server_name = "sleep_service";
 
 #ifdef USE_SLEEP_PLUGIN
-  RegisterRosActionNode(factory, "../lib/libsleep_action_plugin.so", params);
+  RegisterRosBTNode(factory, "../lib/libsleep_action_plugin.so", params);
 #else
   factory.registerNodeType<SleepAction>("Sleep", params);
 #endif

@@ -62,12 +62,12 @@ public:
    * @brief Any subclass of BtActionNode that accepts parameters must provide a
    * providedPorts method and call providedBasicPorts in it.
    * @param addition Additional ports to add to BT port list
-   * @return BT::PortsList Containing basic ports along with node-specific ports
+   * @return PortsList Containing basic ports along with node-specific ports
    */
-  static BT::PortsList providedBasicPorts(BT::PortsList addition)
+  static PortsList providedBasicPorts(PortsList addition)
   {
-    BT::PortsList basic = {
-      BT::InputPort<std::string>("action_name", "__default__placeholder__", "Action server name")
+    PortsList basic = {
+      InputPort<std::string>("action_name", "__default__placeholder__", "Action server name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -75,9 +75,9 @@ public:
 
   /**
    * @brief Creates list of BT ports
-   * @return BT::PortsList Containing basic ports along with node-specific ports
+   * @return PortsList Containing basic ports along with node-specific ports
    */
-  static BT::PortsList providedPorts()
+  static PortsList providedPorts()
   {
     return providedBasicPorts({});
   }
@@ -162,21 +162,11 @@ template<class T> inline
     action_client_ = external_action_client;
   }
   else {
-     callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
     // Three cases:
     // - we use the default action_name in NodeParams when port is empty
     // - we use the action_name in the port and it is a static string.
     // - we use the action_name in the port and it is blackboard entry.
-
-    // Port must exist, even if empty, since we have a default value at least
-    if(!getInput<std::string>("action_name"))
-    {
-      throw std::logic_error(
-          "Can't find port [action_name]. "
-          "Did you forget to use RosActionNode::providedBasicPorts() "
-          "in your derived class?");
-    }
-
+    
     // check port remapping
     auto portIt = config().input_ports.find("action_name");
     if(portIt != config().input_ports.end())
@@ -227,6 +217,7 @@ template<class T> inline
   }
 
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
   action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
   prev_action_name_ = action_name;
 

@@ -48,7 +48,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("topic_name", "default", "Topic name")
+      InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -75,9 +75,9 @@ protected:
 
 private:
 
-  bool createPublisher(const std::string& topic_name);
-
   std::shared_ptr<Publisher> publisher_;
+
+  bool createPublisher(const std::string& topic_name);
 };
 
 //----------------------------------------------------------------
@@ -91,24 +91,47 @@ template<class T> inline
     : BT::ConditionNode(instance_name, conf),
       node_(params.nh)
 { 
-  // If the content of the port "action_name" is not
-  // a pointer to the blackboard, but a static string, we can
-  // create the client in the constructor.
-  const std::string topic_name = config().input_ports.at("topic_name");    
-  if(topic_name == "default")
+  // Three cases:
+  // - we use the default topic_name in NodeParams when port is empty
+  // - we use the topic_name in the port and it is a static string.
+  // - we use the topic_name in the port and it is blackboard entry.
+  
+  // check port remapping
+  auto portIt = config().input_ports.find("topic_name");
+  if(portIt != config().input_ports.end())
   {
-    if(params.default_server_name.empty())
+    const std::string& bb_topic_name = portIt->second;
+
+    if(bb_topic_name.empty() || bb_topic_name == "__default__placeholder__")
     {
-      throw RuntimeError("Both default_server_name  and topic_name is empty");
+      if(params.default_server_name.empty()) {
+        throw std::logic_error(
+          "Both [topic_name] in the InputPort and the NodeParams are empty.");
+      }
+      else {
+        createPublisher(params.default_server_name);
+      }
     }
-    createPublisher(params.default_server_name);
-  }
-  else if(!isBlackboardPointer(topic_name))
-  {
-    createPublisher(topic_name);
+    else if(!isBlackboardPointer(bb_topic_name))
+    {
+      // If the content of the port "topic_name" is not
+      // a pointer to the blackboard, but a static string, we can
+      // create the client in the constructor.
+      createPublisher(bb_topic_name);
+    }
+    else {
+      topic_name_may_change_ = true;
+      // createPublisher will be invoked in the first tick().
+    }
   }
   else {
-    topic_name_may_change_ = true;
+    if(params.default_server_name.empty()) {
+      throw std::logic_error(
+        "Both [topic_name] in the InputPort and the NodeParams are empty.");
+    }
+    else {
+      createPublisher(params.default_server_name);
+    }
   }
 }
 

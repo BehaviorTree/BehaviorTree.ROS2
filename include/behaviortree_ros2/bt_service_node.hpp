@@ -59,7 +59,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("service_name", "default", "Service name")
+      InputPort<std::string>("service_name", "__default__placeholder__", "Service name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -108,8 +108,6 @@ protected:
 
 private:
 
-  bool createClient(const std::string &service_name);
-
   typename std::shared_ptr<ServiceClient> service_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
@@ -120,6 +118,8 @@ private:
   NodeStatus on_feedback_state_change_;
   bool response_received_;
   typename Response::SharedPtr response_;
+
+  bool createClient(const std::string &service_name);
 };
 
 //----------------------------------------------------------------
@@ -141,26 +141,48 @@ template<class T> inline
   }
   else
   { 
-    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-    // If the content of the port "action_name" is not
-    // a pointer to the blackboard, but a static string, we can
-    // create the client in the constructor.
-    const std::string service_name = config().input_ports.at("service_name");    
-    if(service_name == "default")
+    // Three cases:
+    // - we use the default service_name in NodeParams when port is empty
+    // - we use the service_name in the port and it is a static string.
+    // - we use the service_name in the port and it is blackboard entry.
+    
+    // check port remapping
+    auto portIt = config().input_ports.find("service_name");
+    if(portIt != config().input_ports.end())
     {
-      if(params.default_server_name.empty())
+      const std::string& bb_service_name = portIt->second;
+
+      if(bb_service_name.empty() || bb_service_name == "__default__placeholder__")
       {
-        throw RuntimeError("Both default_server_name  and service_name is empty");
+        if(params.default_server_name.empty()) {
+          throw std::logic_error(
+            "Both [service_name] in the InputPort and the NodeParams are empty.");
+        }
+        else {
+          createClient(params.default_server_name);
+        }
       }
-      createClient(params.default_server_name);
-    }
-    else if(!isBlackboardPointer(service_name))
-    {
-      createClient(service_name);
+      else if(!isBlackboardPointer(bb_service_name))
+      {
+        // If the content of the port "service_name" is not
+        // a pointer to the blackboard, but a static string, we can
+        // create the client in the constructor.
+        createClient(bb_service_name);
+      }
+      else {
+        service_name_may_change_ = true;
+        // createClient will be invoked in the first tick().
+      }
     }
     else {
-      service_name_may_change_ = true;
+
+      if(params.default_server_name.empty()) {
+        throw std::logic_error(
+          "Both [service_name] in the InputPort and the NodeParams are empty.");
+      }
+      else {
+        createClient(params.default_server_name);
+      }
     }
   }
 }
@@ -172,8 +194,10 @@ template<class T> inline
   {
     throw RuntimeError("service_name is empty");
   }
-  const rmw_qos_profile_t& qos_profile{rmw_qos_profile_services_default};
-  service_client_ = node_->create_client<T>(service_name, qos_profile, callback_group_);
+
+  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+  service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
   prev_service_name_ = service_name;
 
   bool found = service_client_->wait_for_service(service_timeout_);

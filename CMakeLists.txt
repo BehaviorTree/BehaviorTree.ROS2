@@ -60,6 +60,10 @@ ament_export_libraries(
 ######################################################
 # INSTALL
 
+install(DIRECTORY include/
+  DESTINATION include
+)
+
 install(TARGETS 
   behavior_tree_engine
   behavior_tree_engine_old
@@ -67,7 +71,6 @@ install(TARGETS
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
-  INCLUDES DESTINATION include
 )
 
 ######################################################

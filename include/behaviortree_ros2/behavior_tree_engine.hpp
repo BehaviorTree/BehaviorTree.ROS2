@@ -24,7 +24,6 @@
 #include "behaviortree_cpp/behavior_tree.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/xml_parsing.h"
-#include "behaviortree_cpp/loggers/bt_zmq_publisher.h"
 
 
 namespace BT
@@ -107,7 +106,6 @@ public:
 protected:
   // The factory that will be used to dynamically construct the behavior tree
   BehaviorTreeFactory factory_;
-  std::unique_ptr<PublisherZMQ> groot_monitor_;
   std::shared_ptr<rclcpp::Node> node_;
 };
 

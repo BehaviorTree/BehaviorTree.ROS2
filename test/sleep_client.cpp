@@ -67,12 +67,12 @@ int main(int argc, char **argv)
 
   factory.registerNodeType<PrintValue>("PrintValue");
 
-  BT::ActionNodeParams params;
+  RosNodeParams params;
   params.nh = nh;
-  params.default_server_name = "sleep_service";
+  params.default_port_value = "sleep_service";
 
 #ifdef USE_SLEEP_PLUGIN
-  RegisterRosActionNode(factory, "../lib/libsleep_action_plugin.so", params);
+  RegisterRosNode(factory, "../lib/libsleep_action_plugin.so", params);
 #else
   factory.registerNodeType<SleepAction>("Sleep", params);
 #endif

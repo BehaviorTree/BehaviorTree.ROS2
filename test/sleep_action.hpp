@@ -7,10 +7,9 @@ class SleepAction: public RosActionNode<behaviortree_ros2::action::Sleep>
 {
 public:
   SleepAction(const std::string& name,
-              const BT::NodeConfig& conf,
-              const ActionNodeParams& params,
-              typename std::shared_ptr<ActionClient> action_client = {})
-    : RosActionNode<behaviortree_ros2::action::Sleep>(name, conf, params, action_client)
+              const NodeConfig& conf,
+              const RosNodeParams& params)
+    : RosActionNode<behaviortree_ros2::action::Sleep>(name, conf, params)
   {}
 
   static BT::PortsList providedPorts()

@@ -1,5 +1,19 @@
-#ifndef BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
-#define BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_
+// Copyright (c) 2018 Intel Corporation
+// Copyright (c) 2023 Davide Faconti
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
 
 #include <memory>
 #include <string>
@@ -9,19 +23,10 @@
 #include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp_action/rclcpp_action.hpp"
 
+#include "behaviortree_ros2/ros_node_params.hpp"
+
 namespace BT
 {
-
-struct ActionNodeParams
-{
-  // ros node
-  std::shared_ptr<rclcpp::Node> nh;
-
-  // You can leave this empty and use the port "server_name"
-  std::string default_server_name;
-
-  std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
-};
 
 enum ActionNodeErrorCode
 {
@@ -34,10 +39,22 @@ enum ActionNodeErrorCode
 };
 
 /**
- * @brief Abstract class representing use to call a ROS2 Action (client).
+ * @brief Abstract class to wrap rclcpp_action::Client<>
  *
- * It will try to be non-blocking for the entire duration of the call.
- * The derived class whould reimplement the virtual methods as described below.
+ * For instance, given the type AddTwoInts described in this tutorial:
+ * https://docs.ros.org/en/humble/Tutorials/Intermediate/Writing-an-Action-Server-Client/Cpp.html
+ *
+ * the corresponding wrapper would be:
+ *
+ * class FibonacciNode: public RosActionNode<action_tutorials_interfaces::action::Fibonacci>
+ *
+ * RosActionNode will try to be non-blocking for the entire duration of the call.
+ * The derived class must reimplement the virtual methods as described below.
+ *
+ * The name of the action will be determined as follows:
+ *
+ * 1. If a value is passes in the InputPort "action_name", use that
+ * 2. Otherwise, use the value in RosNodeParams::default_port_value
  */
 template<class ActionT>
 class RosActionNode : public BT::ActionNodeBase
@@ -52,27 +69,24 @@ public:
   using GoalHandle = typename rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
   using Feedback = typename ActionT::Feedback;
-  using Params = ActionNodeParams;
 
-  /** You are not supposed to instantiate this class directly, the factory will do it.
-   * To register this class into the factory, use:
+  /** To register this class into the factory, use:
    *
-   *    RegisterRosAction<DerivedClasss>(factory, params)
+   *    factory.registerNodeType<>(node_name, params);
    *
-   * Note that if the external_action_client is not set, the constructor will build its own.
-   * */
+   */
   explicit RosActionNode(const std::string & instance_name,
                          const BT::NodeConfig& conf,
-                         const ActionNodeParams& params,
-                         typename std::shared_ptr<ActionClient> external_action_client = {});
+                         const RosNodeParams& params);
 
   virtual ~RosActionNode() = default;
 
   /**
-   * @brief Any subclass of BtActionNode that accepts parameters must provide a
+   * @brief Any subclass of RosActionNode that has ports must implement a
    * providedPorts method and call providedBasicPorts in it.
+   *
    * @param addition Additional ports to add to BT port list
-   * @return PortsList Containing basic ports along with node-specific ports
+   * @return PortsList containing basic ports along with node-specific ports
    */
   static PortsList providedBasicPorts(PortsList addition)
   {
@@ -94,12 +108,16 @@ public:
 
   NodeStatus tick() override final;
 
-  /// The default halt() implementation will call cancelGoal is necessary.
+  /// The default halt() implementation will call cancelGoal if necessary.
   void halt() override;
 
-  /** setGoal is a callback invoked to return the goal message (ActionT::Goal).
-   * If conditions are not met, it should return "false" and the BT::Action
-   * will return FAILURE.
+  /** setGoal s a callback that allows the user to set
+   *  the goal message (ActionT::Goal).
+   *
+   * @param goal  the goal to be sent to the action server.
+   *
+   * @return false if the request should not be sent. In that case,
+   * RosActionNode::onFailure(INVALID_GOAL) will be called.
    */
   virtual bool setGoal(Goal& goal) = 0;
 
@@ -159,68 +177,61 @@ private:
 template<class T> inline
   RosActionNode<T>::RosActionNode(const std::string & instance_name,
                                   const NodeConfig &conf,
-                                  const ActionNodeParams& params,
-                                  typename std::shared_ptr<ActionClient> external_action_client):
+                                  const RosNodeParams &params):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
   server_timeout_(params.server_timeout)
 {
-  if( external_action_client )
+  // Three cases:
+  // - we use the default action_name in RosNodeParams when port is empty
+  // - we use the action_name in the port and it is a static string.
+  // - we use the action_name in the port and it is blackboard entry.
+
+  // Port must exist, even if empty, since we have a default value at least
+  if(!getInput<std::string>("server_name"))
   {
-    action_client_ = external_action_client;
+    throw std::logic_error(
+      "Can't find port [server_name]. "
+      "Did you forget to use RosActionNode::providedBasicPorts() "
+      "in your derived class?");
   }
-  else {
-    // Three cases:
-    // - we use the default action_name in NodeParams when port is empty
-    // - we use the action_name in the port and it is a static string.
-    // - we use the action_name in the port and it is blackboard entry.
 
-    // Port must exist, even if empty, since we have a default value at least
-    if(!getInput<std::string>("server_name"))
+  // check port remapping
+  auto portIt = config().input_ports.find("action_name");
+  if(portIt != config().input_ports.end())
+  {
+    const std::string& bb_action_name = portIt->second;
+
+    if(bb_action_name.empty() || bb_action_name == "__default__placeholder__")
     {
-      throw std::logic_error(
-          "Can't find port [server_name]. "
-          "Did you forget to use RosActionNode::providedBasicPorts() "
-          "in your derived class?");
-    }
-
-    // check port remapping
-    auto portIt = config().input_ports.find("action_name");
-    if(portIt != config().input_ports.end())
-    {
-      const std::string& bb_action_name = portIt->second;
-
-      if(bb_action_name.empty() || bb_action_name == "__default__placeholder__")
-      {
-        if(params.default_server_name.empty()) {
-          throw std::logic_error(
-            "Both [action_name] in the InputPort and the NodeParams are empty.");
-        }
-        else {
-          createClient(params.default_server_name);
-        }
-      }
-      else if(!isBlackboardPointer(bb_action_name))
-      {
-        // If the content of the port "action_name" is not
-        // a pointer to the blackboard, but a static string, we can
-        // create the client in the constructor.
-        createClient(bb_action_name);
+      if(params.default_port_value.empty()) {
+        throw std::logic_error(
+          "Both [action_name] in the InputPort and the RosNodeParams are empty.");
       }
       else {
-        action_name_may_change_ = true;
-        // createClient will be invoked in the first tick().
+        createClient(params.default_port_value);
       }
+    }
+    else if(!isBlackboardPointer(bb_action_name))
+    {
+      // If the content of the port "action_name" is not
+      // a pointer to the blackboard, but a static string, we can
+      // create the client in the constructor.
+      createClient(bb_action_name);
     }
     else {
+      action_name_may_change_ = true;
+      // createClient will be invoked in the first tick().
+    }
+  }
+  else {
 
-      if(params.default_server_name.empty()) {
-        throw std::logic_error(
-          "Both [action_name] in the InputPort and the NodeParams are empty.");
-      }
-      else {
-        createClient(params.default_server_name);
-      }
+    if(params.default_port_value.empty()) {
+      throw std::logic_error(
+        "Both [action_name] in the InputPort and the RosNodeParams are empty.");
+    }
+    else {
+      createClient(params.default_port_value);
     }
   }
 }
@@ -236,6 +247,7 @@ template<class T> inline
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
   action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+
   prev_action_name_ = action_name;
 
   bool found = action_client_->wait_for_action_server(server_timeout_);
@@ -266,7 +278,7 @@ template<class T> inline
   //------------------------------------------
   auto CheckStatus = [](NodeStatus status)
   {
-    if( status != NodeStatus::SUCCESS && status != NodeStatus::FAILURE )
+    if( !isStatusCompleted(status) )
     {
       throw std::logic_error("RosActionNode: the callback must return either SUCCESS of FAILURE");
     }
@@ -300,7 +312,7 @@ template<class T> inline
       on_feedback_state_change_ = onFeedback(feedback);
       if( on_feedback_state_change_ == NodeStatus::IDLE)
       {
-        throw std::logic_error("onFeedback must not retunr IDLE");
+        throw std::logic_error("onFeedback must not return IDLE");
       }
       emitWakeUpSignal();
     };
@@ -342,8 +354,8 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      if (callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay) !=
-          rclcpp::FutureReturnCode::SUCCESS)
+      auto ret = callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay);
+      if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
         if( (node_->now() - time_goal_sent_) > timeout )
         {
@@ -417,4 +429,3 @@ template<class T> inline
 
 }  // namespace BT
 
-#endif  // BEHAVIOR_TREE_ROS2__BT_ACTION_NODE_HPP_

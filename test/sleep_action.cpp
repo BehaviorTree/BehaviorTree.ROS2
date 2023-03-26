@@ -22,4 +22,4 @@ NodeStatus SleepAction::onFailure(ActionNodeErrorCode error)
 
 // Plugin registration.
 // The class SleepAction will self register with name  "Sleep".
-RegisterROSActionNode(SleepAction, "Sleep");
+CreateRosNodePlugin(SleepAction, "Sleep");

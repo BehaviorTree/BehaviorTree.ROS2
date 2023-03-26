@@ -18,6 +18,11 @@ find_package(behaviortree_cpp REQUIRED )
 find_package(ament_index_cpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
+add_library(bt_ros2 src/bt_ros2.cpp)
+target_include_directories(bt_ros2 PRIVATE
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
+ament_target_dependencies(bt_ros2 ${THIS_PACKAGE_INCLUDE_DEPENDS})
+
 ######################################################
 rosidl_generate_interfaces(${PROJECT_NAME}
     "action/Sleep.action")

@@ -72,12 +72,12 @@ public:
    * @brief Any subclass of BtActionNode that accepts parameters must provide a
    * providedPorts method and call providedBasicPorts in it.
    * @param addition Additional ports to add to BT port list
-   * @return BT::PortsList Containing basic ports along with node-specific ports
+   * @return PortsList Containing basic ports along with node-specific ports
    */
-  static BT::PortsList providedBasicPorts(BT::PortsList addition)
+  static PortsList providedBasicPorts(PortsList addition)
   {
-    BT::PortsList basic = {
-      BT::InputPort<std::string>("server_name", "__default__placeholder__", "Action server name")
+    PortsList basic = {
+      InputPort<std::string>("action_name", "__default__placeholder__", "Action server name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;
@@ -85,9 +85,9 @@ public:
 
   /**
    * @brief Creates list of BT ports
-   * @return BT::PortsList Containing basic ports along with node-specific ports
+   * @return PortsList Containing basic ports along with node-specific ports
    */
-  static BT::PortsList providedPorts()
+  static PortsList providedPorts()
   {
     return providedBasicPorts({});
   }
@@ -112,7 +112,7 @@ public:
    * It generally returns RUNNING, but the user can also use this callback to cancel the
    * current action and return SUCCESS or FAILURE.
    */
-  virtual BT::NodeStatus onFeeback(const std::shared_ptr<const Feedback> feedback)
+  virtual BT::NodeStatus onFeedback(const std::shared_ptr<const Feedback> /*feedback*/)
   {
     return NodeStatus::RUNNING;
   }
@@ -120,7 +120,7 @@ public:
   /** Callback invoked when something goes wrong.
    * It must return either SUCCESS or FAILURE.
    */
-  virtual BT::NodeStatus onFailure(ActionNodeErrorCode error)
+  virtual BT::NodeStatus onFailure(ActionNodeErrorCode /*error*/)
   {
     return NodeStatus::FAILURE;
   }
@@ -131,14 +131,15 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_server_name_;
-  bool server_name_may_change_ = false;
+  std::string prev_action_name_;
+  bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
 
 private:
 
   ActionClientPtr action_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
+  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
@@ -170,9 +171,9 @@ template<class T> inline
   }
   else {
     // Three cases:
-    // - we use the default server_name in ActionNodeParams when port is empty
-    // - we use the server_name in the port and it is a static string.
-    // - we use the server_name in the port and it is blackboard entry.
+    // - we use the default action_name in NodeParams when port is empty
+    // - we use the action_name in the port and it is a static string.
+    // - we use the action_name in the port and it is blackboard entry.
 
     // Port must exist, even if empty, since we have a default value at least
     if(!getInput<std::string>("server_name"))
@@ -184,30 +185,30 @@ template<class T> inline
     }
 
     // check port remapping
-    auto portIt = config().input_ports.find("server_name");
+    auto portIt = config().input_ports.find("action_name");
     if(portIt != config().input_ports.end())
     {
-      const std::string& bb_server_name = portIt->second;
+      const std::string& bb_action_name = portIt->second;
 
-      if(bb_server_name.empty() || bb_server_name == "__default__placeholder__")
+      if(bb_action_name.empty() || bb_action_name == "__default__placeholder__")
       {
         if(params.default_server_name.empty()) {
           throw std::logic_error(
-            "Both [server_name] in the InputPort and the ActionNodeParams are empty.");
+            "Both [action_name] in the InputPort and the NodeParams are empty.");
         }
         else {
           createClient(params.default_server_name);
         }
       }
-      else if(!isBlackboardPointer(bb_server_name))
+      else if(!isBlackboardPointer(bb_action_name))
       {
-        // If the content of the port "server_name" is not
+        // If the content of the port "action_name" is not
         // a pointer to the blackboard, but a static string, we can
         // create the client in the constructor.
-        createClient(bb_server_name);
+        createClient(bb_action_name);
       }
       else {
-        server_name_may_change_ = true;
+        action_name_may_change_ = true;
         // createClient will be invoked in the first tick().
       }
     }
@@ -215,7 +216,7 @@ template<class T> inline
 
       if(params.default_server_name.empty()) {
         throw std::logic_error(
-          "Both [server_name] in the InputPort and the ActionNodeParams are empty.");
+          "Both [action_name] in the InputPort and the NodeParams are empty.");
       }
       else {
         createClient(params.default_server_name);
@@ -225,40 +226,40 @@ template<class T> inline
 }
 
 template<class T> inline
-  bool RosActionNode<T>::createClient(const std::string& server_name)
+  bool RosActionNode<T>::createClient(const std::string& action_name)
 {
-  if(server_name.empty())
+  if(action_name.empty())
   {
-    throw RuntimeError("server_name is empty");
+    throw RuntimeError("action_name is empty");
   }
 
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  action_client_ = rclcpp_action::create_client<T>(node_, server_name, callback_group_);
-  prev_server_name_ = server_name;
+  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+  prev_action_name_ = action_name;
 
   bool found = action_client_->wait_for_action_server(server_timeout_);
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
-                 name().c_str(), prev_server_name_.c_str());
+                 name().c_str(), prev_action_name_.c_str());
   }
   return found;
 }
-
 
 template<class T> inline
   NodeStatus RosActionNode<T>::tick()
 {
   // First, check if the action_client_ is valid and that the name of the
-  // server_name in the port didn't change.
+  // action_name in the port didn't change.
   // otherwise, create a new client
-  if(!action_client_ || (status() == NodeStatus::IDLE && server_name_may_change_))
+  if(!action_client_ || (status() == NodeStatus::IDLE && action_name_may_change_))
   {
-    std::string server_name;
-    getInput("server_name", server_name);
-    if(prev_server_name_ != server_name)
+    std::string action_name;
+    getInput("action_name", action_name);
+    if(prev_action_name_ != action_name)
     {
-      createClient(server_name);
+      createClient(action_name);
     }
   }
 
@@ -296,10 +297,10 @@ template<class T> inline
       [this](typename GoalHandle::SharedPtr,
              const std::shared_ptr<const Feedback> feedback)
     {
-      on_feedback_state_change_ = onFeeback(feedback);
+      on_feedback_state_change_ = onFeedback(feedback);
       if( on_feedback_state_change_ == NodeStatus::IDLE)
       {
-        throw std::logic_error("onFeeback must not retunr IDLE");
+        throw std::logic_error("onFeedback must not retunr IDLE");
       }
       emitWakeUpSignal();
     };
@@ -307,13 +308,13 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_INFO( node_->get_logger(), "result_callback" );
+      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
       result_ = result;
       emitWakeUpSignal();
     };
     //--------------------
     goal_options.goal_response_callback =
-      [this](std::shared_future<typename GoalHandle::SharedPtr> const future_handle)
+      [this](typename GoalHandle::SharedPtr const future_handle)
     {
       auto goal_handle_ = future_handle.get();
       if (!goal_handle_)
@@ -333,7 +334,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    rclcpp::spin_some(node_);
+    callback_group_executor_.spin_some();
 
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
@@ -341,13 +342,11 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      if (rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay) !=
+      if (callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
-        RCLCPP_WARN( node_->get_logger(), "waiting goal confirmation" );
         if( (node_->now() - time_goal_sent_) > timeout )
         {
-          RCLCPP_WARN( node_->get_logger(), "TIMEOUT" );
           return CheckStatus( onFailure(SEND_GOAL_TIMEOUT) );
         }
         else{
@@ -366,7 +365,7 @@ template<class T> inline
       }
     }
 
-    // SECOND case: onFeeback requested a stop
+    // SECOND case: onFeedback requested a stop
     if( on_feedback_state_change_ != NodeStatus::RUNNING )
     {
       cancelGoal();
@@ -405,11 +404,11 @@ template<class T> inline
 {
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
 
-  if (rclcpp::spin_until_future_complete(node_, future_cancel, server_timeout_) !=
+  if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
-                 prev_server_name_.c_str());
+                 prev_action_name_.c_str());
   }
 }
 

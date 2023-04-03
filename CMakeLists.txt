@@ -80,9 +80,19 @@ install(
   DESTINATION include
 )
 
+install(
+  TARGETS bt_ros2
+  EXPORT bt_ros2Targets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
 ament_export_include_directories(include)
 
-ament_export_dependencies(behaviortree_cpp rosidl_default_runtime)
+ament_export_libraries(bt_ros2)
+ament_export_dependencies(behaviortree_cpp)
 
 ament_package()
 

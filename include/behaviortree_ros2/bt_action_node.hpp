@@ -167,7 +167,7 @@ private:
   bool goal_received_;
   WrappedResult result_;
 
-  bool createClient(const std::string &server_name);
+  bool createClient(const std::string &action_name);
 };
 
 //----------------------------------------------------------------
@@ -188,10 +188,10 @@ template<class T> inline
   // - we use the action_name in the port and it is blackboard entry.
 
   // Port must exist, even if empty, since we have a default value at least
-  if(!getInput<std::string>("server_name"))
+  if(!getInput<std::string>("action_name"))
   {
     throw std::logic_error(
-      "Can't find port [server_name]. "
+      "Can't find port [action_name]. "
       "Did you forget to use RosActionNode::providedBasicPorts() "
       "in your derived class?");
   }

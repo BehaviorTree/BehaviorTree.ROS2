@@ -215,7 +215,7 @@ template<class T> inline
     return status;
   };
   callback_group_executor_.spin_some();
-  auto status = CheckStatus (onMessageReceived(last_msg_));
+  auto status = CheckStatus (onTick(last_msg_));
   last_msg_ = nullptr;
 
   return status;

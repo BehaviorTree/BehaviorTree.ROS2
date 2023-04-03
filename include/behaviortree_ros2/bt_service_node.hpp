@@ -23,7 +23,7 @@
 
 #include "behaviortree_ros2/ros_node_params.hpp"
 
-namespace BT::ROS
+namespace BT
 {
 
 enum ServiceNodeErrorCode

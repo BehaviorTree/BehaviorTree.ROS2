@@ -18,13 +18,13 @@ find_package(behaviortree_cpp REQUIRED )
 find_package(ament_index_cpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-add_library(bt_ros2 src/bt_ros2.cpp)
-target_include_directories(bt_ros2 PRIVATE
+add_library(${PROJECT_NAME} src/bt_ros2.cpp)
+target_include_directories(${PROJECT_NAME} PRIVATE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
-ament_target_dependencies(bt_ros2 ${THIS_PACKAGE_INCLUDE_DEPENDS})
+ament_target_dependencies(${PROJECT_NAME} ${THIS_PACKAGE_INCLUDE_DEPENDS})
 
 ######################################################
-rosidl_generate_interfaces(${PROJECT_NAME}
+rosidl_generate_interfaces(${PROJECT_NAME}_SLEEP
     "action/Sleep.action")
 
 # macro to remove some boiler plate
@@ -32,7 +32,9 @@ function(add_target_dependencies target)
     target_include_directories(${target} PRIVATE
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
     ament_target_dependencies(${target} ${THIS_PACKAGE_INCLUDE_DEPENDS})
-    rosidl_target_interfaces(${target} ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+    rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}_SLEEP" "rosidl_typesupport_cpp")
+    target_link_libraries(${target} "${cpp_typesupport_target}")
 endfunction()
 
 ######################################################
@@ -76,14 +78,20 @@ install(TARGETS
   )
 
 install(
-  DIRECTORY include/
-  DESTINATION include
-)
+    TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin)
+  
+install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
+  
 
 ament_export_include_directories(include)
 
-ament_export_dependencies(behaviortree_cpp rosidl_default_runtime)
+ament_export_libraries(${PROJECT_NAME})
+
+ament_export_targets(${PROJECT_NAME})
+
+ament_export_dependencies(behaviortree_cpp rclcpp_action rclcpp)
 
 ament_package()
-
-

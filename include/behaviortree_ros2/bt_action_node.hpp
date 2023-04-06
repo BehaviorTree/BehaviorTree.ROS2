@@ -187,15 +187,6 @@ template<class T> inline
   // - we use the action_name in the port and it is a static string.
   // - we use the action_name in the port and it is blackboard entry.
 
-  // Port must exist, even if empty, since we have a default value at least
-  if(!getInput<std::string>("action_name"))
-  {
-    throw std::logic_error(
-      "Can't find port [action_name]. "
-      "Did you forget to use RosActionNode::providedBasicPorts() "
-      "in your derived class?");
-  }
-
   // check port remapping
   auto portIt = config().input_ports.find("action_name");
   if(portIt != config().input_ports.end())

@@ -85,6 +85,7 @@ install(
   
 install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
   
+install(TARGETS sleep_client sleep_server DESTINATION lib/${PROJECT_NAME})
 
 ament_export_include_directories(include)
 

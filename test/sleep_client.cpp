@@ -49,7 +49,7 @@ public:
             <PrintValue message="sleep completed"/>
             <Fallback>
                 <Timeout msec="1500">
-                   <Sleep name="sleepB" server_name="sleep_service" msec="2000"/>
+                   <Sleep name="sleepB" msec="2000"/>
                 </Timeout>
                 <PrintValue message="sleep aborted"/>
             </Fallback>

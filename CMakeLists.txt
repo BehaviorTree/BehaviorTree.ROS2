@@ -25,7 +25,7 @@ ament_target_dependencies(${PROJECT_NAME} ${THIS_PACKAGE_INCLUDE_DEPENDS})
 
 ######################################################
 rosidl_generate_interfaces(${PROJECT_NAME}_SLEEP
-    "action/Sleep.action")
+  "action/Sleep.action" LIBRARY_NAME ${PROJECT_NAME})
 
 # macro to remove some boiler plate
 function(add_target_dependencies target)

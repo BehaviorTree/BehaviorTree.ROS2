@@ -91,7 +91,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("action_name", "__default__placeholder__", "Action server name")
+      InputPort<std::string>("action_name", "Action server name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;

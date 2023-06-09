@@ -70,7 +70,7 @@ public:
   static PortsList providedBasicPorts(PortsList addition)
   {
     PortsList basic = {
-      InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name")
+      InputPort<std::string>("topic_name", "Topic name")
     };
     basic.insert(addition.begin(), addition.end());
     return basic;

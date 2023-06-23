@@ -17,7 +17,7 @@ Our main goals are:
 Note that this library is compatible **only** with:
 
 - **BT.CPP** 4.1 or older.
-- **ROS** Galactic or older.
+- **ROS2** Humble or older.
 
 Additionally, check **plugins.hpp** to see how to learn how to
 wrap your Nodes into plugins that can be loaded at run-time.

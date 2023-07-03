@@ -400,6 +400,9 @@ template<class T> inline
   {
     cancelGoal();
   }
+  resetStatus();
+  action_client_.reset();
+  createClient(prev_action_name_);
 }
 
 template<class T> inline

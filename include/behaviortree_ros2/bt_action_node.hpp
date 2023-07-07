@@ -399,10 +399,10 @@ template<class T> inline
   if( status() == NodeStatus::RUNNING )
   {
     cancelGoal();
+    resetStatus();
+    action_client_.reset();
+    createClient(prev_action_name_);
   }
-  resetStatus();
-  action_client_.reset();
-  createClient(prev_action_name_);
 }
 
 template<class T> inline

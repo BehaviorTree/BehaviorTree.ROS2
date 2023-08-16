@@ -57,7 +57,7 @@ void RegisterRosNode(BT::BehaviorTreeFactory& factory,
                      const std::filesystem::path& filepath,
                      const BT::RosNodeParams& params)
 {
-  BT::SharedLibrary loader(filepath);
+  BT::SharedLibrary loader(filepath.generic_string());
   typedef void (*Func)(BT::BehaviorTreeFactory&,
                        const BT::RosNodeParams&);
   auto func = (Func)loader.getSymbol("BT_RegisterRosNodeFromPlugin");

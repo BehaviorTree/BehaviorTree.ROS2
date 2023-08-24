@@ -1,6 +1,6 @@
 <package format="3">
   <name>behaviortree_ros2</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>
   This package provides a ROS2 wrapper, on top of BehaviorTree.CPP.
   </description>

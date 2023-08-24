@@ -34,6 +34,18 @@ enum ServiceNodeErrorCode
   SERVICE_ABORTED
 };
 
+inline const char* toStr(const ServiceNodeErrorCode& err)
+{
+  switch (err)
+  {
+    case SERVICE_UNREACHABLE: return "SERVICE_UNREACHABLE";
+    case SERVICE_TIMEOUT: return "SERVICE_TIMEOUT";
+    case INVALID_REQUEST: return "INVALID_REQUEST";
+    case SERVICE_ABORTED: return "SERVICE_ABORTED";
+  }
+  return nullptr;
+}
+
 /**
  * @brief Abstract class use to wrap rclcpp::Client<>
  *

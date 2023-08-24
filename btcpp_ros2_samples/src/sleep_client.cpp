@@ -79,7 +79,9 @@ int main(int argc, char **argv)
 
   auto tree = factory.createTreeFromText(xml_text);
 
-  tree.tickWhileRunning();
+  for(int i=0; i<5; i++){
+    tree.tickWhileRunning();
+  }
 
   return 0;
 }

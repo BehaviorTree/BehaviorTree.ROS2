@@ -38,6 +38,20 @@ enum ActionNodeErrorCode
   INVALID_GOAL
 };
 
+inline const char* toStr(const ActionNodeErrorCode& err)
+{
+  switch (err)
+  {
+    case SERVER_UNREACHABLE: return "SERVER_UNREACHABLE";
+    case SEND_GOAL_TIMEOUT: return "SEND_GOAL_TIMEOUT";
+    case GOAL_REJECTED_BY_SERVER: return "GOAL_REJECTED_BY_SERVER";
+    case ACTION_ABORTED: return "ACTION_ABORTED";
+    case ACTION_CANCELLED: return "ACTION_CANCELLED";
+    case INVALID_GOAL: return "INVALID_GOAL";
+  }
+  return nullptr;
+}
+
 /**
  * @brief Abstract class to wrap rclcpp_action::Client<>
  *
@@ -106,10 +120,9 @@ public:
     return providedBasicPorts({});
   }
 
-  NodeStatus tick() override final;
-
-  /// The default halt() implementation will call cancelGoal if necessary.
-  void halt() override;
+  /// @brief  Callback executed when the node is halted. Note that cancelGoal()
+  /// is done automatically.
+  virtual void onHalt() {}
 
   /** setGoal s a callback that allows the user to set
    *  the goal message (ActionT::Goal).
@@ -145,6 +158,12 @@ public:
 
   /// Method used to send a request to the Action server to cancel the current goal
   void cancelGoal();
+
+
+  /// The default halt() implementation will call cancelGoal if necessary.
+  void halt() override final;
+
+  NodeStatus tick() override final;
 
 protected:
 
@@ -311,9 +330,11 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
-      result_ = result;
-      emitWakeUpSignal();
+      if (goal_handle_->get_goal_id() == result.goal_id) {
+        RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
+        result_ = result;
+        emitWakeUpSignal();
+      }
     };
     //--------------------
     goal_options.goal_response_callback =
@@ -324,7 +345,7 @@ template<class T> inline
       {
         RCLCPP_ERROR(node_->get_logger(), "Goal was rejected by server");
       } else {
-        RCLCPP_INFO(node_->get_logger(), "Goal accepted by server, waiting for result");
+        RCLCPP_DEBUG(node_->get_logger(), "Goal accepted by server, waiting for result");
       }
     };
     //--------------------
@@ -396,9 +417,10 @@ template<class T> inline
 template<class T> inline
   void RosActionNode<T>::halt()
 {
-  if( status() == NodeStatus::RUNNING )
+  if(status() == BT::NodeStatus::RUNNING)
   {
     cancelGoal();
+    onHalt();
   }
 }
 

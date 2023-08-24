@@ -45,11 +45,11 @@ public:
      <BehaviorTree>
         <Sequence>
             <PrintValue message="start"/>
-            <Sleep name="sleepA" msec="2000"/>
+            <SleepAction name="sleepA" msec="2000"/>
             <PrintValue message="sleep completed"/>
             <Fallback>
                 <Timeout msec="1500">
-                   <Sleep name="sleepB" server_name="sleep_service" msec="2000"/>
+                   <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
                 </Timeout>
                 <PrintValue message="sleep aborted"/>
             </Fallback>
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 #ifdef USE_SLEEP_PLUGIN
   RegisterRosNode(factory, "../lib/libsleep_action_plugin.so", params);
 #else
-  factory.registerNodeType<SleepAction>("Sleep", params);
+  factory.registerNodeType<SleepAction>("SleepAction", params);
 #endif
 
   auto tree = factory.createTreeFromText(xml_text);

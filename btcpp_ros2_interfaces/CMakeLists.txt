@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-rosidl_generate_interfaces(sleep_interface
+rosidl_generate_interfaces(btcpp_ros2_interfaces
     "action/Sleep.action")
 
 ament_export_dependencies(rosidl_default_runtime)

@@ -1,15 +1,15 @@
-#include <behaviortree_ros2/bt_action_node.hpp>
-#include "behaviortree_ros2/action/sleep.hpp"
+#include "behaviortree_ros2/bt_action_node.hpp"
+#include "btcpp_ros2_interfaces/action/sleep.hpp"
 
 using namespace BT;
 
-class SleepAction: public RosActionNode<behaviortree_ros2::action::Sleep>
+class SleepAction: public RosActionNode<btcpp_ros2_interfaces::action::Sleep>
 {
 public:
   SleepAction(const std::string& name,
               const NodeConfig& conf,
               const RosNodeParams& params)
-    : RosActionNode<behaviortree_ros2::action::Sleep>(name, conf, params)
+    : RosActionNode<btcpp_ros2_interfaces::action::Sleep>(name, conf, params)
   {}
 
   static BT::PortsList providedPorts()

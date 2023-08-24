@@ -1,0 +1,23 @@
+<package format="3">
+  <name>btcpp_ros2_samples</name>
+  <version>0.1.0</version>
+  <description>
+  Examples related to behaviortree_ros2
+  </description>
+
+  <maintainer email="davide.faconti@gmail.com">Davide Faconti</maintainer>
+  <license>MIT</license>
+  <author>Davide Faconti</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>behaviortree_ros2</depend>
+  <depend>btcpp_ros2_interfaces</depend>
+
+<export>
+  <build_type>ament_cmake</build_type>
+</export>
+
+</package>

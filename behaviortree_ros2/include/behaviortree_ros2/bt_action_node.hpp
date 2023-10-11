@@ -427,12 +427,20 @@ template<class T> inline
 template<class T> inline
   void RosActionNode<T>::cancelGoal()
 {
+  auto future_result = action_client_->async_get_result(goal_handle_);
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
 
   if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
+                 prev_action_name_.c_str());
+  }
+
+  if (callback_group_executor_.spin_until_future_complete(future_result) !=
+      rclcpp::FutureReturnCode::SUCCESS)
+  {
+    RCLCPP_ERROR( node_->get_logger(), "Failed to get result call failed :( for [%s]",
                  prev_action_name_.c_str());
   }
 }

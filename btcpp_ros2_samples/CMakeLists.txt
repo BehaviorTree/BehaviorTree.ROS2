@@ -7,10 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(behaviortree_ros2 REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(btcpp_ros2_interfaces REQUIRED)
 
 set(THIS_PACKAGE_DEPS 
     behaviortree_ros2
+    std_msgs
     btcpp_ros2_interfaces )
 
 ######################################################
@@ -39,6 +41,11 @@ add_executable(sleep_server src/sleep_server.cpp)
 ament_target_dependencies(sleep_server ${THIS_PACKAGE_DEPS}) 
 
 ######################################################
+# Build subscriber_test
+add_executable(subscriber_test src/subscriber_test.cpp)
+ament_target_dependencies(subscriber_test ${THIS_PACKAGE_DEPS}) 
+
+######################################################
 # INSTALL
 
 install(TARGETS
@@ -46,6 +53,7 @@ install(TARGETS
   sleep_client_dyn
   sleep_server
   sleep_plugin
+  subscriber_test
   DESTINATION lib/${PROJECT_NAME}
   )
 

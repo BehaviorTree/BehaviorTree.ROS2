@@ -12,6 +12,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>behaviortree_ros2</depend>
+  <depend>std_msgs</depend>
   <depend>btcpp_ros2_interfaces</depend>
 
 <export>

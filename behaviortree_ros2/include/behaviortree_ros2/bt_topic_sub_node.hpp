@@ -22,9 +22,11 @@
 #include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
+#include <boost/signals2.hpp>
 
 namespace BT
 {
+
 
 /**
  * @brief Abstract class to wrap a Topic subscriber.
@@ -43,10 +45,43 @@ namespace BT
 template<class TopicT>
 class RosTopicSubNode : public BT::ConditionNode
 {
-
-public:
+ public:
   // Type definitions
   using Subscriber = typename rclcpp::Subscription<TopicT>;
+
+ protected: 
+  struct SubscriberInstance
+  {
+    std::shared_ptr<Subscriber> subscriber;
+    rclcpp::CallbackGroup::SharedPtr callback_group;
+    rclcpp::executors::SingleThreadedExecutor callback_group_executor;
+    boost::signals2::signal<void (const std::shared_ptr<TopicT>&)> broadcaster;
+  };
+
+  static std::mutex& registryMutex()
+  {
+    static std::mutex sub_mutex;
+    return sub_mutex;
+  }
+
+  // contains the fully-qualified name of the node and the name of the topic
+  static SubscriberInstance& getRegisteredInstance(const std::string& key)
+  {
+    static std::unordered_map<std::string, SubscriberInstance> subscribers_registry;
+    return subscribers_registry[key];
+  }
+
+  std::shared_ptr<rclcpp::Node> node_;
+  SubscriberInstance* sub_instance_ = nullptr;
+  std::shared_ptr<TopicT> last_msg_;
+  std::string topic_name_;
+
+  rclcpp::Logger logger()
+  {
+    return node_->get_logger();
+  }
+
+ public:
 
   /** You are not supposed to instantiate this class directly, the factory will do it.
    * To register this class into the factory, use:
@@ -87,31 +122,16 @@ public:
 
   NodeStatus tick() override final;
 
-  /** topicCallback is the callback invoked when a message is received.
-   */
-  virtual void topicCallback(const std::shared_ptr<TopicT> msg);
-
   /** Callback invoked in the tick. You must return either SUCCESS of FAILURE
    *
-   * @param last_msg the latest message received since the last tick.
-   * it might be empty.
+   * @param last_msg the latest message received, since the last tick.
+   *                  Will be empty if no new message received.
+   * 
    * @return the new status of the Node, based on last_msg
    */
-  virtual BT::NodeStatus onTick(const typename TopicT::SharedPtr& last_msg) = 0;
-
-protected:
-
-  std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_topic_name_;
-  bool topic_name_may_change_ = false;
+  virtual NodeStatus onTick(const std::shared_ptr<TopicT>& last_msg) = 0;
 
 private:
-
-  std::shared_ptr<Subscriber> subscriber_;
-  typename TopicT::SharedPtr last_msg_;
-  bool is_message_received_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
   bool createSubscriber(const std::string& topic_name);
 };
@@ -151,7 +171,7 @@ template<class T> inline
       createSubscriber(bb_topic_name);
     }
     else {
-      topic_name_may_change_ = true;
+      // do nothing
       // createSubscriber will be invoked in the first tick().
     }
   }
@@ -173,22 +193,50 @@ template<class T> inline
   {
     throw RuntimeError("topic_name is empty");
   }
-  
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  rclcpp::SubscriptionOptions sub_option;
-  sub_option.callback_group = callback_group_;
-  auto callback = std::bind(&RosTopicSubNode::topicCallback, this, std::placeholders::_1);
-  subscriber_ = node_->create_subscription<T>(topic_name, 1, callback, sub_option);
-  prev_topic_name_ = topic_name;
+  if(sub_instance_)
+  {
+    throw RuntimeError("Can't call createSubscriber more than once");
+  }
+
+  // find SubscriberInstance in the registry
+  std::unique_lock lk(registryMutex());
+  const auto key = topic_name + "@" + node_->get_fully_qualified_name();
+  sub_instance_ = &(getRegisteredInstance(key));
+
+  // just created (subscriber is not initialized)
+  if(!sub_instance_->subscriber)
+  {
+    // create a callback group for this particular instance
+    sub_instance_->callback_group = 
+      node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+    sub_instance_->callback_group_executor.add_callback_group(
+      sub_instance_->callback_group, node_->get_node_base_interface());
+
+    rclcpp::SubscriptionOptions sub_option;
+      sub_option.callback_group = sub_instance_->callback_group;
+
+    // The callback will broadcast to all the instances of RosTopicSubNode<T>
+    auto callback = [this](const std::shared_ptr<T> msg) {
+      sub_instance_->broadcaster(msg);
+    };
+    sub_instance_->subscriber = 
+      node_->create_subscription<T>(topic_name, 1, callback, sub_option);
+
+    RCLCPP_INFO(logger(), 
+      "Node [%s] created Subscriber to topic [%s]",
+      name().c_str(), topic_name.c_str() );
+  }
+
+  // add "this" as received of the broadcaster
+  sub_instance_->broadcaster.connect([this](const std::shared_ptr<T> msg)
+  {
+    last_msg_ = msg;
+  });
+    
+  topic_name_ = topic_name;
   return true;
 }
 
-template<class T> inline
-  void RosTopicSubNode<T>::topicCallback(const std::shared_ptr<T> msg)
-{
-  last_msg_ = msg;
-}
 
 template<class T> inline
   NodeStatus RosTopicSubNode<T>::tick()
@@ -196,25 +244,23 @@ template<class T> inline
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber
-  if(!subscriber_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
+  if(!sub_instance_)
   {
     std::string topic_name;
     getInput("topic_name", topic_name);
-    if(prev_topic_name_ != topic_name)
-    {
-      createSubscriber(topic_name);
-    }
+    createSubscriber(topic_name); 
   }
 
   auto CheckStatus = [](NodeStatus status)
   {
     if( !isStatusCompleted(status) )
     {
-      throw std::logic_error("RosTopicSubNode: the callback must return either SUCCESS or FAILURE");
+      throw std::logic_error("RosTopicSubNode: the callback must return" 
+                             "either SUCCESS or FAILURE");
     }
     return status;
   };
-  callback_group_executor_.spin_some();
+  sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus (onTick(last_msg_));
   last_msg_ = nullptr;
 

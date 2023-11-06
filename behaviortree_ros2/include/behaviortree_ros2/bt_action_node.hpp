@@ -171,6 +171,7 @@ protected:
   std::string prev_action_name_;
   bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
+  const std::chrono::milliseconds wait_for_server_timeout_;
 
 private:
 
@@ -199,7 +200,8 @@ template<class T> inline
                                   const RosNodeParams &params):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
-  server_timeout_(params.server_timeout)
+  server_timeout_(params.server_timeout),
+  wait_for_server_timeout_(params.wait_for_server_timeout)
 {
   // Three cases:
   // - we use the default action_name in RosNodeParams when port is empty
@@ -260,7 +262,7 @@ template<class T> inline
 
   prev_action_name_ = action_name;
 
-  bool found = action_client_->wait_for_action_server(server_timeout_);
+  bool found = action_client_->wait_for_action_server(wait_for_server_timeout_);
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",

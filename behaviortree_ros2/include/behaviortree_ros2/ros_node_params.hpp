@@ -35,7 +35,10 @@ struct RosNodeParams
   std::string default_port_value;
 
   // parameters used only by service client and action clients
+
+  // timeout when sending a request
   std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
+  // timeout used when detecting the server the first time
   std::chrono::milliseconds wait_for_server_timeout = std::chrono::milliseconds(500);
 };
 

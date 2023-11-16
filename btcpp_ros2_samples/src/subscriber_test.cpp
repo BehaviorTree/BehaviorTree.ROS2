@@ -17,7 +17,7 @@ public:
     return {};
   }
 
-  NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String>& last_msg) override
+  NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String> last_msg) override
   {
     if(last_msg) // empty if no new message received, since the last tick
     {

@@ -34,8 +34,9 @@ struct RosNodeParams
   // - RosTopicSubNode: name of the topic to subscribe to
   std::string default_port_value;
 
-  // parameter used only by service client and action clients
+  // parameters used only by service client and action clients
   std::chrono::milliseconds server_timeout = std::chrono::milliseconds(1000);
+  std::chrono::milliseconds wait_for_server_timeout = std::chrono::milliseconds(500);
 };
 
 }

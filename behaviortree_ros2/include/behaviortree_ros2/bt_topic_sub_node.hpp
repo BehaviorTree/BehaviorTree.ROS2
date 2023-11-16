@@ -52,10 +52,31 @@ class RosTopicSubNode : public BT::ConditionNode
  protected: 
   struct SubscriberInstance
   {
+    void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
+    {
+      // create a callback group for this particular instance
+      callback_group = 
+        node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+      callback_group_executor.add_callback_group(
+        callback_group, node->get_node_base_interface());
+
+      rclcpp::SubscriptionOptions option;
+      option.callback_group = callback_group;
+
+    // The callback will broadcast to all the instances of RosTopicSubNode<T>
+      auto callback = [this](const std::shared_ptr<TopicT> msg) 
+      {
+        broadcaster(msg);
+      };
+      subscriber =  node->create_subscription<TopicT>(topic_name, 1, callback, option);
+    }
+
     std::shared_ptr<Subscriber> subscriber;
     rclcpp::CallbackGroup::SharedPtr callback_group;
     rclcpp::executors::SingleThreadedExecutor callback_group_executor;
-    boost::signals2::signal<void (const std::shared_ptr<TopicT>&)> broadcaster;
+    boost::signals2::signal<void (const std::shared_ptr<TopicT>)> broadcaster;
+
+
   };
 
   static std::mutex& registryMutex()
@@ -75,6 +96,7 @@ class RosTopicSubNode : public BT::ConditionNode
   SubscriberInstance* sub_instance_ = nullptr;
   std::shared_ptr<TopicT> last_msg_;
   std::string topic_name_;
+  boost::signals2::connection signal_connection_;
 
   rclcpp::Logger logger()
   {
@@ -94,7 +116,10 @@ class RosTopicSubNode : public BT::ConditionNode
                            const BT::NodeConfig& conf,
                            const RosNodeParams& params);
 
-  virtual ~RosTopicSubNode() = default;
+  virtual ~RosTopicSubNode() 
+  {
+    signal_connection_.disconnect();
+  }
 
   /**
    * @brief Any subclass of RosTopicNode that accepts parameters must provide a
@@ -129,7 +154,7 @@ class RosTopicSubNode : public BT::ConditionNode
    * 
    * @return the new status of the Node, based on last_msg
    */
-  virtual NodeStatus onTick(const std::shared_ptr<TopicT>& last_msg) = 0;
+  virtual NodeStatus onTick(const std::shared_ptr<TopicT> last_msg) = 0;
 
 private:
 
@@ -206,21 +231,7 @@ template<class T> inline
   // just created (subscriber is not initialized)
   if(!sub_instance_->subscriber)
   {
-    // create a callback group for this particular instance
-    sub_instance_->callback_group = 
-      node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
-    sub_instance_->callback_group_executor.add_callback_group(
-      sub_instance_->callback_group, node_->get_node_base_interface());
-
-    rclcpp::SubscriptionOptions sub_option;
-      sub_option.callback_group = sub_instance_->callback_group;
-
-    // The callback will broadcast to all the instances of RosTopicSubNode<T>
-    auto callback = [this](const std::shared_ptr<T> msg) {
-      sub_instance_->broadcaster(msg);
-    };
-    sub_instance_->subscriber = 
-      node_->create_subscription<T>(topic_name, 1, callback, sub_option);
+    sub_instance_->init(node_, topic_name);
 
     RCLCPP_INFO(logger(), 
       "Node [%s] created Subscriber to topic [%s]",
@@ -228,11 +239,9 @@ template<class T> inline
   }
 
   // add "this" as received of the broadcaster
-  sub_instance_->broadcaster.connect([this](const std::shared_ptr<T> msg)
-  {
-    last_msg_ = msg;
-  });
-    
+  signal_connection_ = sub_instance_->broadcaster.connect(
+    [this](const std::shared_ptr<T> msg) { last_msg_ = msg; } );
+
   topic_name_ = topic_name;
   return true;
 }

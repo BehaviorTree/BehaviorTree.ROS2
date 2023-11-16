@@ -143,6 +143,7 @@ protected:
   std::string prev_service_name_;
   bool service_name_may_change_ = false;
   const std::chrono::milliseconds service_timeout_;
+  const std::chrono::milliseconds wait_for_service_timeout_;
 
 private:
 
@@ -170,7 +171,8 @@ template<class T> inline
                                     const RosNodeParams& params):
   BT::ActionNodeBase(instance_name, conf),
   node_(params.nh),
-  service_timeout_(params.server_timeout)
+  service_timeout_(params.server_timeout),
+  wait_for_service_timeout_(params.wait_for_server_timeout)
 {
   // check port remapping
   auto portIt = config().input_ports.find("service_name");
@@ -225,7 +227,7 @@ template<class T> inline
   service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
   prev_service_name_ = service_name;
 
-  bool found = service_client_->wait_for_service(service_timeout_);
+  bool found = service_client_->wait_for_service(wait_for_service_timeout_);
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Service with name '%s' is not reachable.",

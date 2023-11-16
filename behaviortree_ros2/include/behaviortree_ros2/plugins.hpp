@@ -25,7 +25,6 @@
 //
 // - BT::RosActionNode
 // - BT::RosServiceNode
-// - BT::RosServiceNode
 // - BT::RosTopicPubNode
 // - BT::RosTopicSubNode
 //

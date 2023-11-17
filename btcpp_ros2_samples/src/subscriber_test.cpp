@@ -21,7 +21,7 @@ public:
   {
     if(last_msg) // empty if no new message received, since the last tick
     {
-      RCLCPP_INFO(logger(), "New message: %s",  last_msg->data.c_str());   
+      RCLCPP_INFO(logger(), "[%s] new message: %s", name().c_str(), last_msg->data.c_str());
     }
     return NodeStatus::SUCCESS;
   }
@@ -32,9 +32,9 @@ public:
   <root BTCPP_format="4">
     <BehaviorTree>
       <Sequence>
-        <ReceiveString/>
-        <ReceiveString/>
-        <ReceiveString/>
+        <ReceiveString name="A"/>
+        <ReceiveString name="B"/>
+        <ReceiveString name="C"/>
       </Sequence>
     </BehaviorTree>
   </root>
@@ -52,11 +52,15 @@ int main(int argc, char **argv)
   params.default_port_value = "btcpp_string";
   factory.registerNodeType<ReceiveString>("ReceiveString", params);
 
-  auto tree = factory.createTreeFromText(xml_text);
-
   while(rclcpp::ok())
   {
-    tree.tickWhileRunning();
+    auto tree = factory.createTreeFromText(xml_text);
+    for(int i=0; i<10; i++)
+    {
+      tree.tickWhileRunning();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   return 0;

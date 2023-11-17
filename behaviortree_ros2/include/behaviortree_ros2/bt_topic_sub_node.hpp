@@ -154,7 +154,7 @@ class RosTopicSubNode : public BT::ConditionNode
    * 
    * @return the new status of the Node, based on last_msg
    */
-  virtual NodeStatus onTick(const std::shared_ptr<TopicT> last_msg) = 0;
+  virtual NodeStatus onTick(const std::shared_ptr<TopicT>& last_msg) = 0;
 
 private:
 

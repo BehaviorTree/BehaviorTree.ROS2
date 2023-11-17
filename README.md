@@ -1,4 +1,5 @@
 # BehaviorTree.ROS2
+[![Test](https://github.com/BehaviorTree/BehaviorTree.ROS2/actions/workflows/test.yml/badge.svg)](https://github.com/BehaviorTree/BehaviorTree.ROS2/actions/workflows/test.yml)
 
 This repository contains useful wrappers to use ROS2 and BehaviorTree.CPP together.
 
@@ -11,8 +12,8 @@ In particular, it provides a standard way to implement:
 
 Our main goals are:
 
-- to minimize the amount of bolierplate.
-- to make asynchonous Actions non-blocking.
+- to minimize the amount of boilerplate.
+- to make asynchronous Actions non-blocking.
 
 Note that this library is compatible **only** with:
 
@@ -27,6 +28,6 @@ wrap your Nodes into plugins that can be loaded at run-time.
 
 A lot of code is either inspired or copied from [Nav2](https://navigation.ros.org/).
 
-To this reason we retain the same license and copyright.
+For this reason, we retain the same license and copyright.
 
 

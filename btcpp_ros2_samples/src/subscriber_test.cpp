@@ -52,15 +52,11 @@ int main(int argc, char **argv)
   params.default_port_value = "btcpp_string";
   factory.registerNodeType<ReceiveString>("ReceiveString", params);
 
+  auto tree = factory.createTreeFromText(xml_text);
+
   while(rclcpp::ok())
   {
-    auto tree = factory.createTreeFromText(xml_text);
-    for(int i=0; i<10; i++)
-    {
-      tree.tickWhileRunning();
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    tree.tickWhileRunning();
   }
 
   return 0;

@@ -1,0 +1,28 @@
+name: Test
+on:
+  pull_request:
+  push:
+    branches:
+      - humble
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    env:
+      ROS_DISTRO: ${{ matrix.ros_distro }}
+    container:
+      image: rostooling/setup-ros-docker:ubuntu-jammy-latest
+    strategy:
+      fail-fast: false
+      matrix:
+          ros_distro: [humble]
+    steps:
+    - name: Build and run tests
+      id: action-ros-ci
+      uses: ros-tooling/action-ros-ci@v0.3
+      with:
+        target-ros2-distro: ${{ matrix.ros_distro }}
+    - uses: actions/upload-artifact@v1
+      with:
+        name: colcon-logs
+        path: ros_ws/log

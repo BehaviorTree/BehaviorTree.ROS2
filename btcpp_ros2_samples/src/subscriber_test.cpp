@@ -17,11 +17,11 @@ public:
     return {};
   }
 
-  NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String>& last_msg) override
+  NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String> last_msg) override
   {
     if(last_msg) // empty if no new message received, since the last tick
     {
-      RCLCPP_INFO(logger(), "New message: %s",  last_msg->data.c_str());   
+      RCLCPP_INFO(logger(), "New message: %s",  last_msg->data.c_str());
     }
     return NodeStatus::SUCCESS;
   }

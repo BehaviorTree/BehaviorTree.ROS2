@@ -386,7 +386,7 @@ template<class T> inline
         future_goal_handle_ = {};
 
         if (!goal_handle_) {
-          throw std::runtime_error("Goal was rejected by the action server");
+          return CheckStatus( onFailure( GOAL_REJECTED_BY_SERVER ) );
         }
       }
     }

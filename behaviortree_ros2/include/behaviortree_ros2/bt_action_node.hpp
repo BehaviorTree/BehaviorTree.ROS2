@@ -437,7 +437,7 @@ template<class T> inline
                  prev_action_name_.c_str());
   }
 
-  if (callback_group_executor_.spin_until_future_complete(future_result) !=
+  if (callback_group_executor_.spin_until_future_complete(future_result, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to get result call failed :( for [%s]",

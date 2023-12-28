@@ -50,6 +50,13 @@ class RosTopicSubNode : public BT::ConditionNode
   using Subscriber = typename rclcpp::Subscription<TopicT>;
 
  protected: 
+  enum class ReadMode { READ_ONCE, READ_LATCH, READ_CONFIGURABLE };
+
+  virtual ReadMode getReadMode(void)
+  {
+    return ReadMode::READ_ONCE;
+  }
+
   struct SubscriberInstance
   {
     void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
@@ -132,6 +139,13 @@ class RosTopicSubNode : public BT::ConditionNode
     PortsList basic = {
       InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name")
     };
+    if (getReadMode() == ReadMode::READ_CONFIGURABLE)
+    {
+      basic.push_back(InputPort<bool>(
+        "read_last",
+        false,
+        "Read mode. True if read last message, even if it has already been seen. False if read only new messages."));
+    }
     basic.insert(addition.begin(), addition.end());
     return basic;
   }
@@ -271,7 +285,10 @@ template<class T> inline
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus (onTick(last_msg_));
-  last_msg_ = nullptr;
+  if (getReadMode() == ReadMode::READ_ONCE || (getReadMode() == ReadMode::READ_CONFIGURABLE && !config().input_ports.get<bool>("read_last")))
+  {
+    last_msg_ = nullptr;
+  }
 
   return status;
 }

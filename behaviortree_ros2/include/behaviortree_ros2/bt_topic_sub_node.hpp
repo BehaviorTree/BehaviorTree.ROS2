@@ -26,7 +26,7 @@
 
 namespace BT
 {
-
+enum class SubscriberReadMode { READ_ONCE, READ_LATCH, READ_CONFIGURABLE };
 
 /**
  * @brief Abstract class to wrap a Topic subscriber.
@@ -42,7 +42,7 @@ namespace BT
  * 1. If a value is passes in the InputPort "topic_name", use that
  * 2. Otherwise, use the value in RosNodeParams::default_port_value
  */
-template<class TopicT>
+template<class TopicT, SubscriberReadMode read_mode = SubscriberReadMode::READ_ONCE>
 class RosTopicSubNode : public BT::ConditionNode
 {
  public:
@@ -50,13 +50,6 @@ class RosTopicSubNode : public BT::ConditionNode
   using Subscriber = typename rclcpp::Subscription<TopicT>;
 
  protected: 
-  enum class ReadMode { READ_ONCE, READ_LATCH, READ_CONFIGURABLE };
-
-  virtual ReadMode getReadMode(void)
-  {
-    return ReadMode::READ_ONCE;
-  }
-
   struct SubscriberInstance
   {
     void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
@@ -139,9 +132,9 @@ class RosTopicSubNode : public BT::ConditionNode
     PortsList basic = {
       InputPort<std::string>("topic_name", "__default__placeholder__", "Topic name")
     };
-    if (getReadMode() == ReadMode::READ_CONFIGURABLE)
+    if (read_mode == SubscriberReadMode::READ_CONFIGURABLE)
     {
-      basic.push_back(InputPort<bool>(
+      basic.insert(InputPort<bool>(
         "read_last",
         false,
         "Read mode. True if read last message, even if it has already been seen. False if read only new messages."));
@@ -179,8 +172,8 @@ private:
 //---------------------- DEFINITIONS -----------------------------
 //----------------------------------------------------------------
 
-template<class T> inline
-  RosTopicSubNode<T>::RosTopicSubNode(const std::string & instance_name,
+template<class T, SubscriberReadMode read_mode = SubscriberReadMode::READ_ONCE> inline
+  RosTopicSubNode<T, read_mode>::RosTopicSubNode(const std::string & instance_name,
                                       const NodeConfig &conf,
                                       const RosNodeParams& params)
     : BT::ConditionNode(instance_name, conf),
@@ -225,8 +218,8 @@ template<class T> inline
   }
 }
 
-template<class T> inline
-  bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
+template<class T, SubscriberReadMode read_mode> inline
+  bool RosTopicSubNode<T, read_mode>::createSubscriber(const std::string& topic_name)
 {
   if(topic_name.empty())
   {
@@ -261,8 +254,8 @@ template<class T> inline
 }
 
 
-template<class T> inline
-  NodeStatus RosTopicSubNode<T>::tick()
+template<class T, SubscriberReadMode read_mode> inline
+  NodeStatus RosTopicSubNode<T, read_mode>::tick()
 {
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
@@ -285,7 +278,7 @@ template<class T> inline
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus (onTick(last_msg_));
-  if (getReadMode() == ReadMode::READ_ONCE || (getReadMode() == ReadMode::READ_CONFIGURABLE && !config().input_ports.get<bool>("read_last")))
+  if (read_mode == SubscriberReadMode::READ_ONCE || (read_mode == SubscriberReadMode::READ_CONFIGURABLE && !getInput<bool>("read_last").value()))
   {
     last_msg_ = nullptr;
   }

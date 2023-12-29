@@ -288,7 +288,8 @@ template<class T, SubscriberReadMode read_mode> inline
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus (onTick(last_msg_));
-  if (read_mode == SubscriberReadMode::READ_ONCE || (read_mode == SubscriberReadMode::READ_CONFIGURABLE && !getInput<bool>("read_last").value()))
+  if (read_mode == SubscriberReadMode::READ_ONCE ||
+    (read_mode == SubscriberReadMode::READ_CONFIGURABLE && !getInput<bool>("read_last").value()))
   {
     last_msg_ = nullptr;
   }

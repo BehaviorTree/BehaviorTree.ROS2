@@ -26,6 +26,13 @@
 
 namespace BT
 {
+/**
+ * @brief Settings for how the subscriber should read messages
+ * 
+ * READ_ONCE: Read the message once then clear it
+ * READ_LATCH: Keep reading the same message until a new one is received
+ * READ_CONFIGURABLE: Read the message once then clear it, unless the "read_last" port is set to true 
+ */
 enum class SubscriberReadMode { READ_ONCE, READ_LATCH, READ_CONFIGURABLE };
 
 /**
@@ -35,12 +42,15 @@ enum class SubscriberReadMode { READ_ONCE, READ_LATCH, READ_CONFIGURABLE };
  *
  * The corresponding wrapper would be:
  *
- * class SubscriberNode: RosTopicSubNode<std_msgs::msg::String>
+ * class SubscriberNode: RosTopicSubNode<std_msgs::msg::String, SubscriberReadMode::READ_ONCE>
  *
  * The name of the topic will be determined as follows:
  *
  * 1. If a value is passes in the InputPort "topic_name", use that
  * 2. Otherwise, use the value in RosNodeParams::default_port_value
+ * 
+ * To configure the reading mode, set the 2nd class template parameter to one of the options in SubscriberReadMode.
+ * If not set READ_ONCE will be used by default for backwards compatibility.
  */
 template<class TopicT, SubscriberReadMode read_mode = SubscriberReadMode::READ_ONCE>
 class RosTopicSubNode : public BT::ConditionNode

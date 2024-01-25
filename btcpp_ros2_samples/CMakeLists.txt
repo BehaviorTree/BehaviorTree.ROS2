@@ -46,6 +46,14 @@ add_executable(subscriber_test src/subscriber_test.cpp)
 ament_target_dependencies(subscriber_test ${THIS_PACKAGE_DEPS}) 
 
 ######################################################
+# Build publisher_tests
+add_executable(publisher_test src/publisher_test.cpp)
+ament_target_dependencies(publisher_test ${THIS_PACKAGE_DEPS})
+
+add_executable(publisher_shared_test src/publisher_test_shared.cpp)
+ament_target_dependencies(publisher_shared_test ${THIS_PACKAGE_DEPS})
+
+######################################################
 # INSTALL
 
 install(TARGETS
@@ -54,6 +62,8 @@ install(TARGETS
   sleep_server
   sleep_plugin
   subscriber_test
+  publisher_test
+  publisher_shared_test
   DESTINATION lib/${PROJECT_NAME}
   )
 

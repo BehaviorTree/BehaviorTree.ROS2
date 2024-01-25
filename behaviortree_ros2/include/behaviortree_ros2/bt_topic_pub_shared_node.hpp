@@ -29,8 +29,8 @@ namespace BT
  * @brief Abstract class to wrap a ROS publisher
  *
  */
-template<class TopicT>
-class RosTopicPubNode : public BT::ConditionNode
+template<class TopicT, class Derived>
+class RosTopicPubSharedNode : public BT::ConditionNode
 {
 
 public:
@@ -44,14 +44,14 @@ public:
    *
    * Note that if the external_action_client is not set, the constructor will build its own.
    * */
-  explicit RosTopicPubNode(const std::string & instance_name,
+  explicit RosTopicPubSharedNode(const std::string & instance_name,
                            const BT::NodeConfig& conf,
                            const RosNodeParams& params);
 
-  virtual ~RosTopicPubNode() = default;
+  virtual ~RosTopicPubSharedNode() = default;
 
   /**
-   * @brief Any subclass of RosTopicPubNode that has additinal ports must provide a
+   * @brief Any subclass of RosTopicPubSharedNode that has additinal ports must provide a
    * providedPorts method and call providedBasicPorts in it.
    *
    * @param addition Additional ports to add to BT port list
@@ -92,10 +92,10 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_topic_name_;
   bool topic_name_may_change_ = false;
-  std::shared_ptr<Publisher> publisher_;
-
+  bool initialized = false;
+  static bool shared_resource_initialized;
+  static std::shared_ptr<Publisher> publisher_;
 private:
-
   bool createPublisher(const std::string& topic_name);
 };
 
@@ -103,13 +103,13 @@ private:
 //---------------------- DEFINITIONS -----------------------------
 //----------------------------------------------------------------
 
-template<class T> inline
-  RosTopicPubNode<T>::RosTopicPubNode(const std::string & instance_name,
+template<class T, class D> inline
+  RosTopicPubSharedNode<T, D>::RosTopicPubSharedNode(const std::string & instance_name,
                                       const NodeConfig &conf,
                                       const RosNodeParams& params)
   : BT::ConditionNode(instance_name, conf),
   node_(params.nh)
-{ 
+{
   // check port remapping
   auto portIt = config().input_ports.find("topic_name");
   if(portIt != config().input_ports.end())
@@ -149,21 +149,25 @@ template<class T> inline
   }
 }
 
-template<class T> inline
-  bool RosTopicPubNode<T>::createPublisher(const std::string& topic_name)
+template<class T, class D> inline
+  bool RosTopicPubSharedNode<T, D>::createPublisher(const std::string& topic_name)
 {
   if(topic_name.empty())
   {
     throw RuntimeError("topic_name is empty");
   }
-  
-  publisher_ = node_->create_publisher<T>(topic_name, 1);
-  prev_topic_name_ = topic_name;
+
+  if (!shared_resource_initialized) {
+    publisher_ = node_->create_publisher<T>(topic_name, 1);
+    prev_topic_name_ = topic_name;
+    shared_resource_initialized = true;
+  }
+
   return true;
 }
 
-template<class T> inline
-  NodeStatus RosTopicPubNode<T>::tick()
+template<class T, class D> inline
+  NodeStatus RosTopicPubSharedNode<T, D>::tick()
 {
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
@@ -187,5 +191,10 @@ template<class T> inline
   return NodeStatus::SUCCESS;
 }
 
+template <class TopicT, class Derived>
+bool RosTopicPubSharedNode<TopicT, Derived>::shared_resource_initialized = false;
+
+template <class TopicT, class Derived>
+typename std::shared_ptr<rclcpp::Publisher<TopicT>> RosTopicPubSharedNode<TopicT, Derived>::publisher_ = nullptr;
 }  // namespace BT
 

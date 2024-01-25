@@ -92,7 +92,6 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_topic_name_;
   bool topic_name_may_change_ = false;
-  bool initialized = false;
   static bool shared_resource_initialized;
   static std::shared_ptr<Publisher> publisher_;
 private:

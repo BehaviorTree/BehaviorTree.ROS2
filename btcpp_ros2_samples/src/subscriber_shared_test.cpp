@@ -1,15 +1,15 @@
-#include "behaviortree_ros2/bt_topic_sub_node.hpp"
+#include "behaviortree_ros2/bt_topic_sub_shared_node.hpp"
 #include <std_msgs/msg/string.hpp>
 
 using namespace BT;
 
-class ReceiveString: public RosTopicSubNode<std_msgs::msg::String>
+class ReceiveString: public RosTopicSubSharedNode<std_msgs::msg::String, ReceiveString>
 {
 public:
   ReceiveString(const std::string& name,
                 const NodeConfig& conf,
                 const RosNodeParams& params)
-    : RosTopicSubNode<std_msgs::msg::String>(name, conf, params)
+    : RosTopicSubSharedNode<std_msgs::msg::String, ReceiveString>(name, conf, params)
   {}
 
   static BT::PortsList providedPorts()
@@ -44,7 +44,7 @@ public:
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto nh = std::make_shared<rclcpp::Node>("subscriber_test");
+  auto nh = std::make_shared<rclcpp::Node>("subscriber_shared_test");
 
   BehaviorTreeFactory factory;
 

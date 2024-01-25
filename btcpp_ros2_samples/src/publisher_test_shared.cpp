@@ -58,7 +58,6 @@ int main(int argc, char **argv)
   params.nh = nh;
   params.default_port_value = "btcpp_string";
   factory.registerNodeType<SendString>("SendString", params);
-  factory.registerNodeType<SendInt>("SendInt", params);
 
   auto tree = factory.createTreeFromText(xml_text);
 

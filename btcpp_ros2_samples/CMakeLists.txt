@@ -63,6 +63,14 @@ add_executable(publisher_shared_test src/publisher_test_shared.cpp)
 ament_target_dependencies(publisher_shared_test ${THIS_PACKAGE_DEPS})
 
 ######################################################
+# Build service_tests
+add_executable(add_two_ints_server src/add_two_ints_server.cpp)
+ament_target_dependencies(add_two_ints_server ${THIS_PACKAGE_DEPS})
+
+add_executable(service_test src/service_test.cpp)
+ament_target_dependencies(service_test ${THIS_PACKAGE_DEPS})
+
+######################################################
 # INSTALL
 
 install(TARGETS
@@ -75,6 +83,8 @@ install(TARGETS
   subscriber_shared_test
   publisher_test
   publisher_shared_test
+  add_two_ints_server
+  service_test
   DESTINATION lib/${PROJECT_NAME}
   )
 

@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <mutex>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
 #include "behaviortree_cpp/action_node.h"
@@ -150,11 +151,15 @@ protected:
   const std::chrono::milliseconds wait_for_server_timeout_;
   static bool shared_resource_initialized;
   static ActionClientPtr action_client_;
+  static std::mutex action_client_mutex_;
+
 
 private:
 
   rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
+  static std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> callback_group_executor_;
+  static std::mutex static_members_mutex_;
+
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
@@ -226,16 +231,23 @@ template<class T, class D> inline
 }
 
 template<class T, class D> inline
-  bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
+bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
 {
-  if(action_name.empty())
+  std::lock_guard<std::mutex> lock(static_members_mutex_);
+  if (action_name.empty())
   {
-    throw RuntimeError("action_name is empty");
+      throw RuntimeError("action_name is empty");
   }
 
-  if (!shared_resource_initialized) {
+  if (!shared_resource_initialized)
+  {
+    RCLCPP_INFO(node_->get_logger(), "Creating action client for %s", action_name.c_str());
     callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+    if (callback_group_executor_ == nullptr)
+    {
+        callback_group_executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+    }
+    callback_group_executor_->add_callback_group(callback_group_, node_->get_node_base_interface());
     action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
 
     prev_action_name_ = action_name;
@@ -259,6 +271,7 @@ template<class T, class D> inline
   // otherwise, create a new client
   if(!action_client_ || (status() == NodeStatus::IDLE && action_name_may_change_))
   {
+    RCLCPP_INFO(node_->get_logger(), "Client not initialized or action_name changed");
     std::string action_name;
     getInput("action_name", action_name);
     if(prev_action_name_ != action_name)
@@ -280,6 +293,7 @@ template<class T, class D> inline
   // first step to be done only at the beginning of the Action
   if (status() == BT::NodeStatus::IDLE)
   {
+    RCLCPP_INFO(node_->get_logger(), "Client IDLE sending goal");
     setStatus(NodeStatus::RUNNING);
 
     goal_received_ = false;
@@ -331,7 +345,7 @@ template<class T, class D> inline
       }
     };
     //--------------------
-
+    RCLCPP_INFO(node_->get_logger(), "Goal sent to server");
     future_goal_handle_ = action_client_->async_send_goal( goal, goal_options );
     time_goal_sent_ = node_->now();
 
@@ -340,18 +354,16 @@ template<class T, class D> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    RCLCPP_INFO(rclcpp::get_logger("test"), "check1");
-    callback_group_executor_.spin_some();
-    RCLCPP_INFO(rclcpp::get_logger("test"), "check6");
-
+    std::lock_guard<std::mutex> lock(action_client_mutex_);
+    callback_group_executor_->spin_some();
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
     {
-      RCLCPP_INFO(rclcpp::get_logger("test"), "check2");
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      auto ret = callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay);
+      auto ret = callback_group_executor_->spin_until_future_complete(future_goal_handle_, nodelay);
+
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
         if( (node_->now() - time_goal_sent_) > timeout )
@@ -364,7 +376,6 @@ template<class T, class D> inline
       }
       else
       {
-        RCLCPP_INFO(rclcpp::get_logger("test"), "check3");
         goal_received_ = true;
         goal_handle_ = future_goal_handle_.get();
         future_goal_handle_ = {};
@@ -379,12 +390,10 @@ template<class T, class D> inline
     if( on_feedback_state_change_ != NodeStatus::RUNNING )
 
     {
-      RCLCPP_INFO(rclcpp::get_logger("test"), "check4");
       cancelGoal();
       return on_feedback_state_change_;
     }
     // THIRD case: result received, requested a stop
-    RCLCPP_INFO(rclcpp::get_logger("test"), "check5");
     if( result_.code != rclcpp_action::ResultCode::UNKNOWN)
     {
       if( result_.code == rclcpp_action::ResultCode::ABORTED )
@@ -416,17 +425,17 @@ template<class T, class D> inline
 template<class T, class D> inline
   void RosActionSharedNode<T, D>::cancelGoal()
 {
+  std::lock_guard<std::mutex> lock(action_client_mutex_);
   auto future_result = action_client_->async_get_result(goal_handle_);
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
-
-  if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
+  if (callback_group_executor_->spin_until_future_complete(future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
                  prev_action_name_.c_str());
   }
 
-  if (callback_group_executor_.spin_until_future_complete(future_result, server_timeout_) !=
+  if (callback_group_executor_->spin_until_future_complete(future_result, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to get result call failed :( for [%s]",
@@ -435,8 +444,18 @@ template<class T, class D> inline
 }
 
 template <class ActionT, class Derived>
+typename std::shared_ptr<rclcpp_action::Client<ActionT>> RosActionSharedNode<ActionT, Derived>::action_client_ = nullptr;
+
+template <class ActionT, class Derived>
+std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> RosActionSharedNode<ActionT, Derived>::callback_group_executor_ = nullptr;
+
+template <class ActionT, class Derived>
 bool RosActionSharedNode<ActionT, Derived>::shared_resource_initialized = false;
 
 template <class ActionT, class Derived>
-typename std::shared_ptr<rclcpp_action::Client<ActionT>> RosActionSharedNode<ActionT, Derived>::action_client_ = nullptr;
+std::mutex RosActionSharedNode<ActionT, Derived>::static_members_mutex_;
+
+template <class ActionT, class Derived>
+std::mutex RosActionSharedNode<ActionT, Derived>::action_client_mutex_;
+
 }  // namespace BT

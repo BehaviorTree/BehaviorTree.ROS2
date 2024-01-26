@@ -16,6 +16,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
@@ -34,9 +35,9 @@ namespace BT
  *
  * the corresponding wrapper would be:
  *
- * class AddTwoNumbers: public RosServiceNode<example_interfaces::srv::AddTwoInts>
+ * class AddTwoNumbers: public RosServiceSharedNode<example_interfaces::srv::AddTwoInts>
  *
- * RosServiceNode will try to be non-blocking for the entire duration of the call.
+ * RosServiceSharedNode will try to be non-blocking for the entire duration of the call.
  * The derived class must reimplement the virtual methods as described below.
  *
  * The name of the service will be determined as follows:
@@ -44,8 +45,8 @@ namespace BT
  * 1. If a value is passes in the InputPort "service_name", use that
  * 2. Otherwise, use the value in RosNodeParams::default_port_value
  */
-template<class ServiceT>
-class RosServiceNode : public BT::ActionNodeBase
+template<class ServiceT, class Derived>
+class RosServiceSharedNode : public BT::ActionNodeBase
 {
 
 public:
@@ -58,14 +59,14 @@ public:
    *
    *    factory.registerNodeType<>(node_name, params);
    */
-  explicit RosServiceNode(const std::string & instance_name,
+  explicit RosServiceSharedNode(const std::string & instance_name,
                           const BT::NodeConfig& conf,
                           const BT::RosNodeParams& params);
 
-  virtual ~RosServiceNode() = default;
+  virtual ~RosServiceSharedNode() = default;
 
   /**
-   * @brief Any subclass of RosServiceNode that has ports must implement a
+   * @brief Any subclass of RosServiceSharedNode that has ports must implement a
    * providedPorts method and call providedBasicPorts in it.
    *
    * @param addition Additional ports to add to BT port list
@@ -100,7 +101,7 @@ public:
    * @param request  the request to be sent to the service provider.
    *
    * @return false if the request should not be sent. In that case,
-   * RosServiceNode::onFailure(INVALID_REQUEST) will be called.
+   * RosServiceSharedNode::onFailure(INVALID_REQUEST) will be called.
    */
   virtual bool setRequest(typename Request::SharedPtr& request) = 0;
 
@@ -124,12 +125,12 @@ protected:
   bool service_name_may_change_ = false;
   const std::chrono::milliseconds service_timeout_;
   const std::chrono::milliseconds wait_for_service_timeout_;
-  typename std::shared_ptr<ServiceClient> service_client_;
+  static typename std::shared_ptr<ServiceClient> service_client_;
+  static bool shared_resource_initialized;
 private:
-
-
   rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
+  static std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> callback_group_executor_;
+  static std::mutex mutex_;
 
   std::shared_future<typename Response::SharedPtr> future_response_;
 
@@ -145,8 +146,8 @@ private:
 //---------------------- DEFINITIONS -----------------------------
 //----------------------------------------------------------------
 
-template<class T> inline
-  RosServiceNode<T>::RosServiceNode(const std::string & instance_name,
+template<class T, class D> inline
+  RosServiceSharedNode<T, D>::RosServiceSharedNode(const std::string & instance_name,
                                     const NodeConfig &conf,
                                     const RosNodeParams& params):
   BT::ActionNodeBase(instance_name, conf),
@@ -194,18 +195,26 @@ template<class T> inline
   }
 }
 
-template<class T> inline
-  bool RosServiceNode<T>::createClient(const std::string& service_name)
+template<class T, class D> inline
+  bool RosServiceSharedNode<T, D>::createClient(const std::string& service_name)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if(service_name.empty())
   {
     throw RuntimeError("service_name is empty");
   }
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
-  prev_service_name_ = service_name;
+  if (!shared_resource_initialized) {
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    if (callback_group_executor_ == nullptr) {
+      callback_group_executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+    }
+    callback_group_executor_->add_callback_group(callback_group_, node_->get_node_base_interface());
+    service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
+    prev_service_name_ = service_name;
+    shared_resource_initialized = true;
+  }
+
 
   bool found = service_client_->wait_for_service(wait_for_service_timeout_);
   if(!found)
@@ -216,8 +225,8 @@ template<class T> inline
   return found;
 }
 
-template<class T> inline
-  NodeStatus RosServiceNode<T>::tick()
+template<class T, class D> inline
+  NodeStatus RosServiceSharedNode<T, D>::tick()
 {
   // First, check if the service_client_ is valid and that the name of the
   // service_name in the port didn't change.
@@ -236,7 +245,7 @@ template<class T> inline
   {
     if( !isStatusCompleted(status) )
     {
-      throw std::logic_error("RosServiceNode: the callback must return either SUCCESS or FAILURE");
+      throw std::logic_error("RosServiceSharedNode: the callback must return either SUCCESS or FAILURE");
     }
     return status;
   };
@@ -266,7 +275,8 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    callback_group_executor_.spin_some();
+    std::lock_guard<std::mutex> lock(mutex_);
+    callback_group_executor_->spin_some();
 
     // FIRST case: check if the goal request has a timeout
     if( !response_received_ )
@@ -274,7 +284,7 @@ template<class T> inline
       auto const nodelay = std::chrono::milliseconds(0);
       auto const timeout = rclcpp::Duration::from_seconds( double(service_timeout_.count()) / 1000);
 
-      auto ret = callback_group_executor_.spin_until_future_complete(future_response_, nodelay);
+      auto ret = callback_group_executor_->spin_until_future_complete(future_response_, nodelay);
 
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
@@ -304,8 +314,8 @@ template<class T> inline
   return NodeStatus::RUNNING;
 }
 
-template<class T> inline
-  void RosServiceNode<T>::halt()
+template<class T, class D> inline
+  void RosServiceSharedNode<T, D>::halt()
 {
   if( status() == NodeStatus::RUNNING )
   {
@@ -313,6 +323,16 @@ template<class T> inline
   }
 }
 
+template <class TopicT, class Derived>
+bool RosServiceSharedNode<TopicT, Derived>::shared_resource_initialized = false;
 
+template <class TopicT, class Derived>
+typename std::shared_ptr<rclcpp::Client<TopicT>> RosServiceSharedNode<TopicT, Derived>::service_client_ = nullptr;
+
+template <class ActionT, class Derived>
+std::mutex RosServiceSharedNode<ActionT, Derived>::mutex_;
+
+template <class ActionT, class Derived>
+std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> RosServiceSharedNode<ActionT,Derived>::callback_group_executor_ = nullptr;
 }  // namespace BT
 

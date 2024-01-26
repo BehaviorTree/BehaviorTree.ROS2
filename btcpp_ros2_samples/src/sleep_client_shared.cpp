@@ -1,11 +1,11 @@
-#include "behaviortree_ros2/bt_action_node.hpp"
+#include "behaviortree_ros2/bt_action_shared_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/executors.hpp"
 
 #include "behaviortree_ros2/plugins.hpp"
 
 #ifndef USE_SLEEP_PLUGIN
-#include "sleep_action.hpp"
+#include "sleep_action_shared.hpp"
 #endif
 
 using namespace BT;
@@ -48,17 +48,19 @@ public:
             <PrintValue message="start"/>
             <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
             <PrintValue message="sleep completed"/>
-            <Fallback>
-                <Timeout msec="1500">
-                   <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
-                </Timeout>
-                <PrintValue message="sleep aborted"/>
-            </Fallback>
+            <SleepAction name="sleepB" action_name="sleep_service" msec="3000"/>
         </Sequence>
      </BehaviorTree>
  </root>
  )";
-
+            // <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
+            // <PrintValue message="sleep completed"/>
+            // <Fallback>
+            //     <Timeout msec="3000">
+            //        <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
+            //     </Timeout>
+            //     <PrintValue message="sleep aborted"/>
+            // </Fallback>
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);

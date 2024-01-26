@@ -22,9 +22,9 @@
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "behaviortree_ros2/bt_action_error_code.hpp"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
-#include "behaviortree_ros2/bt_action_error_code.hpp"
 
 namespace BT
 {
@@ -36,9 +36,9 @@ namespace BT
  *
  * the corresponding wrapper would be:
  *
- * class FibonacciNode: public RosActionNode<action_tutorials_interfaces::action::Fibonacci>
+ * class FibonacciNode: public RosActionSharedNode<action_tutorials_interfaces::action::Fibonacci>
  *
- * RosActionNode will try to be non-blocking for the entire duration of the call.
+ * RosActionSharedNode will try to be non-blocking for the entire duration of the call.
  * The derived class must reimplement the virtual methods as described below.
  *
  * The name of the action will be determined as follows:
@@ -46,8 +46,8 @@ namespace BT
  * 1. If a value is passes in the InputPort "action_name", use that
  * 2. Otherwise, use the value in RosNodeParams::default_port_value
  */
-template<class ActionT>
-class RosActionNode : public BT::ActionNodeBase
+template<class ActionT, class Derived>
+class RosActionSharedNode : public BT::ActionNodeBase
 {
 
 public:
@@ -65,14 +65,14 @@ public:
    *    factory.registerNodeType<>(node_name, params);
    *
    */
-  explicit RosActionNode(const std::string & instance_name,
+  explicit RosActionSharedNode(const std::string & instance_name,
                          const BT::NodeConfig& conf,
                          const RosNodeParams& params);
 
-  virtual ~RosActionNode() = default;
+  virtual ~RosActionSharedNode() = default;
 
   /**
-   * @brief Any subclass of RosActionNode that has ports must implement a
+   * @brief Any subclass of RosActionSharedNode that has ports must implement a
    * providedPorts method and call providedBasicPorts in it.
    *
    * @param addition Additional ports to add to BT port list
@@ -106,7 +106,7 @@ public:
    * @param goal  the goal to be sent to the action server.
    *
    * @return false if the request should not be sent. In that case,
-   * RosActionNode::onFailure(INVALID_GOAL) will be called.
+   * RosActionSharedNode::onFailure(INVALID_GOAL) will be called.
    */
   virtual bool setGoal(Goal& goal) = 0;
 
@@ -148,7 +148,9 @@ protected:
   bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
   const std::chrono::milliseconds wait_for_server_timeout_;
-  ActionClientPtr action_client_;
+  static bool shared_resource_initialized;
+  static ActionClientPtr action_client_;
+
 private:
 
   rclcpp::CallbackGroup::SharedPtr callback_group_;
@@ -169,8 +171,8 @@ private:
 //---------------------- DEFINITIONS -----------------------------
 //----------------------------------------------------------------
 
-template<class T> inline
-  RosActionNode<T>::RosActionNode(const std::string & instance_name,
+template<class T, class D> inline
+  RosActionSharedNode<T, D>::RosActionSharedNode(const std::string & instance_name,
                                   const NodeConfig &conf,
                                   const RosNodeParams &params):
   BT::ActionNodeBase(instance_name, conf),
@@ -223,19 +225,22 @@ template<class T> inline
   }
 }
 
-template<class T> inline
-  bool RosActionNode<T>::createClient(const std::string& action_name)
+template<class T, class D> inline
+  bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
 {
   if(action_name.empty())
   {
     throw RuntimeError("action_name is empty");
   }
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+  if (!shared_resource_initialized) {
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+    action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
 
-  prev_action_name_ = action_name;
+    prev_action_name_ = action_name;
+    shared_resource_initialized = true;
+  }
 
   bool found = action_client_->wait_for_action_server(wait_for_server_timeout_);
   if(!found)
@@ -246,8 +251,8 @@ template<class T> inline
   return found;
 }
 
-template<class T> inline
-  NodeStatus RosActionNode<T>::tick()
+template<class T, class D> inline
+  NodeStatus RosActionSharedNode<T, D>::tick()
 {
   // First, check if the action_client_ is valid and that the name of the
   // action_name in the port didn't change.
@@ -267,7 +272,7 @@ template<class T> inline
   {
     if( !isStatusCompleted(status) )
     {
-      throw std::logic_error("RosActionNode: the callback must return either SUCCESS of FAILURE");
+      throw std::logic_error("RosActionSharedNode: the callback must return either SUCCESS of FAILURE");
     }
     return status;
   };
@@ -335,11 +340,14 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
+    RCLCPP_INFO(rclcpp::get_logger("test"), "check1");
     callback_group_executor_.spin_some();
+    RCLCPP_INFO(rclcpp::get_logger("test"), "check6");
 
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
     {
+      RCLCPP_INFO(rclcpp::get_logger("test"), "check2");
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
@@ -356,6 +364,7 @@ template<class T> inline
       }
       else
       {
+        RCLCPP_INFO(rclcpp::get_logger("test"), "check3");
         goal_received_ = true;
         goal_handle_ = future_goal_handle_.get();
         future_goal_handle_ = {};
@@ -368,11 +377,14 @@ template<class T> inline
 
     // SECOND case: onFeedback requested a stop
     if( on_feedback_state_change_ != NodeStatus::RUNNING )
+
     {
+      RCLCPP_INFO(rclcpp::get_logger("test"), "check4");
       cancelGoal();
       return on_feedback_state_change_;
     }
     // THIRD case: result received, requested a stop
+    RCLCPP_INFO(rclcpp::get_logger("test"), "check5");
     if( result_.code != rclcpp_action::ResultCode::UNKNOWN)
     {
       if( result_.code == rclcpp_action::ResultCode::ABORTED )
@@ -391,8 +403,8 @@ template<class T> inline
   return NodeStatus::RUNNING;
 }
 
-template<class T> inline
-  void RosActionNode<T>::halt()
+template<class T, class D> inline
+  void RosActionSharedNode<T, D>::halt()
 {
   if(status() == BT::NodeStatus::RUNNING)
   {
@@ -401,8 +413,8 @@ template<class T> inline
   }
 }
 
-template<class T> inline
-  void RosActionNode<T>::cancelGoal()
+template<class T, class D> inline
+  void RosActionSharedNode<T, D>::cancelGoal()
 {
   auto future_result = action_client_->async_get_result(goal_handle_);
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
@@ -422,8 +434,9 @@ template<class T> inline
   }
 }
 
+template <class ActionT, class Derived>
+bool RosActionSharedNode<ActionT, Derived>::shared_resource_initialized = false;
 
-
-
+template <class ActionT, class Derived>
+typename std::shared_ptr<rclcpp_action::Client<ActionT>> RosActionSharedNode<ActionT, Derived>::action_client_ = nullptr;
 }  // namespace BT
-

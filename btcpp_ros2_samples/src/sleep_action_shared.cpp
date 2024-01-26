@@ -1,14 +1,15 @@
-#include "sleep_action.hpp"
+#include "sleep_action_shared.hpp"
 #include "behaviortree_ros2/plugins.hpp"
 
-bool SleepAction::setGoal(RosActionNode::Goal &goal)
+bool SleepAction::setGoal(RosActionSharedNode::Goal &goal)
 {
+  RCLCPP_INFO(rclcpp::get_logger("test"), "%s, set goal", name().c_str());
   auto timeout = getInput<unsigned>("msec");
   goal.msec_timeout = timeout.value();
   return true;
 }
 
-NodeStatus SleepAction::onResultReceived(const RosActionNode::WrappedResult &wr)
+NodeStatus SleepAction::onResultReceived(const RosActionSharedNode::WrappedResult &wr)
 {
   RCLCPP_INFO( node_->get_logger(), "%s: onResultReceived. Done = %s", name().c_str(),
                wr.result->done ? "true" : "false" );
@@ -20,6 +21,7 @@ NodeStatus SleepAction::onResultReceived(const RosActionNode::WrappedResult &wr)
 NodeStatus SleepAction::onFailure(ActionNodeErrorCode error)
 {
   RCLCPP_ERROR( node_->get_logger(), "%s: onFailure with error: %s", name().c_str(), toStr(error) );
+  RCLCPP_INFO(rclcpp::get_logger("test"), " %s action pointer: %p", name().c_str(), reinterpret_cast<void*>(action_client_.get()));
   return NodeStatus::FAILURE;
 }
 

@@ -23,6 +23,12 @@ add_executable(sleep_client
   src/sleep_client.cpp)
 ament_target_dependencies(sleep_client ${THIS_PACKAGE_DEPS})
 
+
+add_executable(sleep_client_shared
+  src/sleep_action_shared.cpp
+  src/sleep_client_shared.cpp)
+ament_target_dependencies(sleep_client_shared ${THIS_PACKAGE_DEPS})
+
 ######################################################
 # Build a client that call the sleep action (Plugin version)
 
@@ -61,6 +67,7 @@ ament_target_dependencies(publisher_shared_test ${THIS_PACKAGE_DEPS})
 
 install(TARGETS
   sleep_client
+  sleep_client_shared
   sleep_client_dyn
   sleep_server
   sleep_plugin

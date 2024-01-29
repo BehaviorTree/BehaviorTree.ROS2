@@ -249,6 +249,11 @@ template<class T> inline
 template<class T> inline
   NodeStatus RosActionNode<T>::tick()
 {
+  if (!rclcpp::ok()) {
+    RCLCPP_INFO(rclcpp::get_logger("test"), "Node is not ok");
+    halt();
+    return NodeStatus::FAILURE;
+  }
   // First, check if the action_client_ is valid and that the name of the
   // action_name in the port didn't change.
   // otherwise, create a new client

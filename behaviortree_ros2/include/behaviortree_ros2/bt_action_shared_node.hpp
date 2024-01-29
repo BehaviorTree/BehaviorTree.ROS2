@@ -70,7 +70,7 @@ public:
                          const BT::NodeConfig& conf,
                          const RosNodeParams& params);
 
-  virtual ~RosActionSharedNode() = default;
+  virtual ~RosActionSharedNode();
 
   /**
    * @brief Any subclass of RosActionSharedNode that has ports must implement a
@@ -146,6 +146,7 @@ protected:
 
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_action_name_;
+  std::string action_name_;
   bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
   const std::chrono::milliseconds wait_for_server_timeout_;
@@ -158,8 +159,6 @@ private:
 
   rclcpp::CallbackGroup::SharedPtr callback_group_;
   static std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> callback_group_executor_;
-  static std::mutex static_members_mutex_;
-
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
@@ -230,14 +229,47 @@ template<class T, class D> inline
   }
 }
 
+template<class ActionT, class Derived>
+RosActionSharedNode<ActionT, Derived>::~RosActionSharedNode()
+{
+  RCLCPP_INFO(node_->get_logger(), "Destroying Action server for %s", action_name_.c_str());
+  if (action_client_ && goal_handle_) {
+    auto state = goal_handle_->get_status();
+    if (state == rclcpp_action::GoalStatus::STATUS_ACCEPTED ||
+      state == rclcpp_action::GoalStatus::STATUS_EXECUTING) {
+      try {
+        auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
+        if (callback_group_executor_) {
+          callback_group_executor_->spin_some();
+        }
+      } catch (const std::exception& e) {
+        RCLCPP_ERROR(node_->get_logger(), "Exception during goal cancellation in destructor: %s", e.what());
+      }
+    }
+  }
+
+
+  if (callback_group_executor_) {
+    callback_group_executor_.reset();
+  }
+
+  if (action_client_) {
+    action_client_.reset();
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Action server %s destroyed", action_name_.c_str());
+}
+
 template<class T, class D> inline
 bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
 {
-  std::lock_guard<std::mutex> lock(static_members_mutex_);
+  std::lock_guard<std::mutex> lock(action_client_mutex_);
   if (action_name.empty())
   {
       throw RuntimeError("action_name is empty");
   }
+
+  this->action_name_ = action_name;
 
   if (!shared_resource_initialized)
   {
@@ -451,9 +483,6 @@ std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> RosActionSharedNode<A
 
 template <class ActionT, class Derived>
 bool RosActionSharedNode<ActionT, Derived>::shared_resource_initialized = false;
-
-template <class ActionT, class Derived>
-std::mutex RosActionSharedNode<ActionT, Derived>::static_members_mutex_;
 
 template <class ActionT, class Derived>
 std::mutex RosActionSharedNode<ActionT, Derived>::action_client_mutex_;

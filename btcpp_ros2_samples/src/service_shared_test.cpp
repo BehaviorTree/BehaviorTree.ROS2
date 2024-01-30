@@ -35,7 +35,6 @@ public:
 
   virtual BT::NodeStatus onResponseReceived(const Response::SharedPtr& res) override
   {
-    RCLCPP_INFO(rclcpp::get_logger("test"), "pointer: %p", reinterpret_cast<void*>(service_client_.get()));
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Result of %d + %d = %ld",
                a, b, res->sum);
     return BT::NodeStatus::SUCCESS;

@@ -26,7 +26,6 @@ public:
 
   bool setMessage(std_msgs::msg::String& msg)
   {
-    // RCLCPP_INFO(rclcpp::get_logger("test"), "publisher pointer: %p", reinterpret_cast<void*>(publisher_.get()));
     std::string user_message = "";
     getInput("message", user_message);
     msg.data = user_message;

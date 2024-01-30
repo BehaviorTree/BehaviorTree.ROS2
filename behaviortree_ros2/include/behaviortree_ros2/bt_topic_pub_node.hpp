@@ -109,7 +109,7 @@ template<class T> inline
                                       const RosNodeParams& params)
   : BT::ConditionNode(instance_name, conf),
   node_(params.nh)
-{ 
+{
   // check port remapping
   auto portIt = config().input_ports.find("topic_name");
   if(portIt != config().input_ports.end())
@@ -156,7 +156,7 @@ template<class T> inline
   {
     throw RuntimeError("topic_name is empty");
   }
-  
+
   publisher_ = node_->create_publisher<T>(topic_name, 1);
   prev_topic_name_ = topic_name;
   return true;
@@ -165,6 +165,10 @@ template<class T> inline
 template<class T> inline
   NodeStatus RosTopicPubNode<T>::tick()
 {
+  if (!rclcpp::ok())
+  {
+    return NodeStatus::FAILURE;
+  }
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber

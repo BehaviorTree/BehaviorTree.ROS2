@@ -60,14 +60,7 @@ public:
      </BehaviorTree>
  </root>
  )";
-            // <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
-            // <PrintValue message="sleep completed"/>
-            // <Fallback>
-            //     <Timeout msec="3000">
-            //        <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
-            //     </Timeout>
-            //     <PrintValue message="sleep aborted"/>
-            // </Fallback>
+
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);

@@ -168,6 +168,10 @@ template<class T, class D> inline
 template<class T, class D> inline
   NodeStatus RosTopicPubSharedNode<T, D>::tick()
 {
+  if (!rclcpp::ok())
+  {
+    return NodeStatus::FAILURE;
+  }
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber

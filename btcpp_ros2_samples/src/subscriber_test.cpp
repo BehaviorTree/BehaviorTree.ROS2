@@ -19,7 +19,6 @@ public:
 
   NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String>& last_msg) override
   {
-    RCLCPP_INFO(rclcpp::get_logger("test"), "subscriber pointer: %p", reinterpret_cast<void*>(sub_instance_->subscriber.get()));
     if(last_msg) // empty if no new message received, since the last tick
     {
       RCLCPP_INFO(logger(), "[%s] new message: %s", name().c_str(), last_msg->data.c_str());

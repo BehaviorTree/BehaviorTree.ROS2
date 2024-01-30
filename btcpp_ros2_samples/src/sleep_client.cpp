@@ -82,10 +82,10 @@ int main(int argc, char **argv)
 
   auto tree = factory.createTreeFromText(xml_text);
 
-  // while(rclcpp::ok())
-  // {
+  while(rclcpp::ok())
+  {
     tree.tickWhileRunning();
-  // }
+  }
 
   return 0;
 }

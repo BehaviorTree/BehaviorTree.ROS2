@@ -145,8 +145,7 @@ public:
 protected:
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_action_name_;
-  std::string action_name_;
+  std::string current_action_name_;
   bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
   const std::chrono::milliseconds wait_for_server_timeout_;
@@ -232,7 +231,7 @@ template<class T, class D> inline
 template<class ActionT, class Derived>
 RosActionSharedNode<ActionT, Derived>::~RosActionSharedNode()
 {
-  RCLCPP_INFO(node_->get_logger(), "Destroying Action server for %s", action_name_.c_str());
+  RCLCPP_INFO(node_->get_logger(), "Destroying Action server for %s", current_action_name_.c_str());
   if (action_client_ && goal_handle_) {
     auto state = goal_handle_->get_status();
     if (state == rclcpp_action::GoalStatus::STATUS_ACCEPTED ||
@@ -257,7 +256,7 @@ RosActionSharedNode<ActionT, Derived>::~RosActionSharedNode()
     action_client_.reset();
   }
 
-  RCLCPP_INFO(node_->get_logger(), "Action server %s destroyed", action_name_.c_str());
+  RCLCPP_INFO(node_->get_logger(), "Action server %s destroyed", current_action_name_.c_str());
 }
 
 template<class T, class D> inline
@@ -268,8 +267,6 @@ bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
   {
       throw RuntimeError("action_name is empty");
   }
-
-  this->action_name_ = action_name;
 
   if (!shared_resource_initialized)
   {
@@ -282,7 +279,7 @@ bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
     callback_group_executor_->add_callback_group(callback_group_, node_->get_node_base_interface());
     action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
 
-    prev_action_name_ = action_name;
+    current_action_name_ = action_name;
     shared_resource_initialized = true;
   }
 
@@ -290,7 +287,7 @@ bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
-                 name().c_str(), prev_action_name_.c_str());
+                 name().c_str(), current_action_name_.c_str());
   }
   return found;
 }
@@ -298,6 +295,12 @@ bool RosActionSharedNode<T, D>::createClient(const std::string& action_name)
 template<class T, class D> inline
   NodeStatus RosActionSharedNode<T, D>::tick()
 {
+  if (!rclcpp::ok())
+  {
+    halt();
+    return NodeStatus::FAILURE;
+  }
+
   // First, check if the action_client_ is valid and that the name of the
   // action_name in the port didn't change.
   // otherwise, create a new client
@@ -306,7 +309,7 @@ template<class T, class D> inline
     RCLCPP_INFO(node_->get_logger(), "Client not initialized or action_name changed");
     std::string action_name;
     getInput("action_name", action_name);
-    if(prev_action_name_ != action_name)
+    if(current_action_name_ != action_name)
     {
       createClient(action_name);
     }
@@ -464,14 +467,14 @@ template<class T, class D> inline
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
-                 prev_action_name_.c_str());
+                 current_action_name_.c_str());
   }
 
   if (callback_group_executor_->spin_until_future_complete(future_result, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to get result call failed :( for [%s]",
-                 prev_action_name_.c_str());
+                 current_action_name_.c_str());
   }
 }
 

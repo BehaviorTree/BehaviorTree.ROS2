@@ -228,6 +228,12 @@ template<class T, class D> inline
 template<class T, class D> inline
   NodeStatus RosServiceSharedNode<T, D>::tick()
 {
+  if (!rclcpp::ok())
+  {
+    halt();
+    return NodeStatus::FAILURE;
+  }
+
   // First, check if the service_client_ is valid and that the name of the
   // service_name in the port didn't change.
   // otherwise, create a new client

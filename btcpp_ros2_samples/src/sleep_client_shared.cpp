@@ -44,12 +44,19 @@ public:
   static const char* xml_text = R"(
  <root BTCPP_format="4">
      <BehaviorTree>
+      <KeepRunningUntilFailure>
         <Sequence>
             <PrintValue message="start"/>
             <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
             <PrintValue message="sleep completed"/>
-            <SleepAction name="sleepB" action_name="sleep_service" msec="3000"/>
+            <Fallback>
+                <Timeout msec="2500">
+                   <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
+                </Timeout>
+                <PrintValue message="sleep aborted"/>
+            </Fallback>
         </Sequence>
+      </KeepRunningUntilFailure>
      </BehaviorTree>
  </root>
  )";
@@ -82,7 +89,8 @@ int main(int argc, char **argv)
 
   auto tree = factory.createTreeFromText(xml_text);
 
-  for(int i=0; i<5; i++){
+  while(rclcpp::ok())
+  {
     tree.tickWhileRunning();
   }
 

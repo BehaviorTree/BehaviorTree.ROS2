@@ -48,7 +48,19 @@ public:
                            const BT::NodeConfig& conf,
                            const RosNodeParams& params);
 
-  virtual ~RosTopicPubNode() = default;
+  virtual ~RosTopicPubNode()
+  {
+    if (pub_instance_) {
+      pub_instance_.reset();
+      std::unique_lock lk(registryMutex());
+      auto& registry = getRegistry();
+      auto it = registry.find(publisher_key_);
+      if (it != registry.end() && it->second.use_count() <= 1){
+        registry.erase(it);
+        RCLCPP_INFO(logger(), "Remove publisher [%s]", topic_name_.c_str());
+      }
+    }
+  }
 
   /**
    * @brief Any subclass of RosTopicPubNode that has additinal ports must provide a
@@ -88,14 +100,41 @@ public:
   virtual bool setMessage(TopicT& msg) = 0;
 
 protected:
+  struct PublisherInstance
+  {
+    void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
+    {
+      publisher_ = node->create_publisher<TopicT>(topic_name, 1);
+    }
+    std::shared_ptr<Publisher> publisher_;
+  };
+
+  static std::mutex& registryMutex()
+  {
+    static std::mutex pub_mutex;
+    return pub_mutex;
+  }
+
+  // contains the fully-qualified name of the node and the name of the topic
+  static std::unordered_map<std::string, std::shared_ptr<PublisherInstance>>& getRegistry()
+  {
+    static std::unordered_map<std::string, std::shared_ptr<PublisherInstance>> publishers_registry;
+    return publishers_registry;
+  }
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_topic_name_;
+  std::string topic_name_;
   bool topic_name_may_change_ = false;
+  std::string publisher_key_;
+  std::shared_ptr<PublisherInstance> pub_instance_ = nullptr;
 
+  rclcpp::Logger logger()
+  {
+    return node_->get_logger();
+  }
 private:
 
-  std::shared_ptr<Publisher> publisher_;
+
   bool createPublisher(const std::string& topic_name);
 };
 
@@ -157,8 +196,26 @@ template<class T> inline
     throw RuntimeError("topic_name is empty");
   }
 
-  publisher_ = node_->create_publisher<T>(topic_name, 1);
-  prev_topic_name_ = topic_name;
+  std::unique_lock lk(registryMutex());
+  publisher_key_ = std::string(node_->get_fully_qualified_name()) + "/" + topic_name;
+  auto& registry = getRegistry();
+  auto it = registry.find(publisher_key_);
+  if (it == registry.end())
+  {
+    it = registry.insert( {publisher_key_, std::make_shared<PublisherInstance>() }).first;
+    pub_instance_ = it->second;
+    pub_instance_->init(node_, topic_name);
+
+    RCLCPP_INFO(logger(),
+      "Node [%s] created publisher topic [%s]",
+      name().c_str(), topic_name.c_str());
+  }
+  else
+  {
+    pub_instance_ = it->second;
+  }
+
+  topic_name_ = topic_name;
   return true;
 }
 
@@ -172,11 +229,11 @@ template<class T> inline
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber
-  if(!publisher_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
+  if(!pub_instance_ || (status() == NodeStatus::IDLE && topic_name_may_change_))
   {
     std::string topic_name;
     getInput("topic_name", topic_name);
-    if(prev_topic_name_ != topic_name)
+    if(topic_name_ != topic_name)
     {
       createPublisher(topic_name);
     }
@@ -187,7 +244,8 @@ template<class T> inline
   {
     return NodeStatus::FAILURE;
   }
-  publisher_->publish(msg);
+  pub_instance_->publisher_->publish(msg);
+  // publisher_->publish(msg);
   return NodeStatus::SUCCESS;
 }
 

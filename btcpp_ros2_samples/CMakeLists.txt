@@ -10,7 +10,7 @@ find_package(behaviortree_ros2 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(btcpp_ros2_interfaces REQUIRED)
 
-set(THIS_PACKAGE_DEPS 
+set(THIS_PACKAGE_DEPS
     behaviortree_ros2
     std_msgs
     btcpp_ros2_interfaces )
@@ -18,7 +18,7 @@ set(THIS_PACKAGE_DEPS
 ######################################################
 # Build a client that call the sleep action (STATIC version)
 
-add_executable(sleep_client 
+add_executable(sleep_client
   src/sleep_action.cpp
   src/sleep_client.cpp)
 ament_target_dependencies(sleep_client ${THIS_PACKAGE_DEPS})
@@ -38,12 +38,25 @@ ament_target_dependencies(sleep_client_dyn ${THIS_PACKAGE_DEPS})
 ######################################################
 # Build Server
 add_executable(sleep_server src/sleep_server.cpp)
-ament_target_dependencies(sleep_server ${THIS_PACKAGE_DEPS}) 
+ament_target_dependencies(sleep_server ${THIS_PACKAGE_DEPS})
 
 ######################################################
 # Build subscriber_test
 add_executable(subscriber_test src/subscriber_test.cpp)
-ament_target_dependencies(subscriber_test ${THIS_PACKAGE_DEPS}) 
+ament_target_dependencies(subscriber_test ${THIS_PACKAGE_DEPS})
+
+######################################################
+# Build publisher_tests
+add_executable(publisher_test src/publisher_test.cpp)
+ament_target_dependencies(publisher_test ${THIS_PACKAGE_DEPS})
+
+######################################################
+# Build service_tests
+add_executable(add_two_ints_server src/add_two_ints_server.cpp)
+ament_target_dependencies(add_two_ints_server ${THIS_PACKAGE_DEPS})
+
+add_executable(service_test src/service_test.cpp)
+ament_target_dependencies(service_test ${THIS_PACKAGE_DEPS})
 
 ######################################################
 # INSTALL
@@ -54,6 +67,9 @@ install(TARGETS
   sleep_server
   sleep_plugin
   subscriber_test
+  publisher_test
+  add_two_ints_server
+  service_test
   DESTINATION lib/${PROJECT_NAME}
   )
 

@@ -22,6 +22,7 @@ public:
 
   BT::NodeStatus tick() override {
     std::string msg;
+
     if( getInput("message", msg ) ){
       std::cout << "PrintValue: " << msg << std::endl;
       return NodeStatus::SUCCESS;
@@ -43,9 +44,10 @@ public:
   static const char* xml_text = R"(
  <root BTCPP_format="4">
      <BehaviorTree>
+      <KeepRunningUntilFailure>
         <Sequence>
             <PrintValue message="start"/>
-            <SleepAction name="sleepA" msec="2000"/>
+            <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
             <PrintValue message="sleep completed"/>
             <Fallback>
                 <Timeout msec="1500">
@@ -54,6 +56,7 @@ public:
                 <PrintValue message="sleep aborted"/>
             </Fallback>
         </Sequence>
+      </KeepRunningUntilFailure>
      </BehaviorTree>
  </root>
  )";
@@ -79,7 +82,8 @@ int main(int argc, char **argv)
 
   auto tree = factory.createTreeFromText(xml_text);
 
-  for(int i=0; i<5; i++){
+  while(rclcpp::ok())
+  {
     tree.tickWhileRunning();
   }
 

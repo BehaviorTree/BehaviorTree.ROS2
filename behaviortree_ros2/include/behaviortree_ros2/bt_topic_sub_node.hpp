@@ -49,13 +49,13 @@ class RosTopicSubNode : public BT::ConditionNode
   // Type definitions
   using Subscriber = typename rclcpp::Subscription<TopicT>;
 
- protected: 
+ protected:
   struct SubscriberInstance
   {
     void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
     {
       // create a callback group for this particular instance
-      callback_group = 
+      callback_group =
         node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
       callback_group_executor.add_callback_group(
         callback_group, node->get_node_base_interface());
@@ -64,7 +64,7 @@ class RosTopicSubNode : public BT::ConditionNode
       option.callback_group = callback_group;
 
     // The callback will broadcast to all the instances of RosTopicSubNode<T>
-      auto callback = [this](const std::shared_ptr<TopicT> msg) 
+      auto callback = [this](const std::shared_ptr<TopicT> msg)
       {
         broadcaster(msg);
       };
@@ -117,7 +117,7 @@ class RosTopicSubNode : public BT::ConditionNode
                            const BT::NodeConfig& conf,
                            const RosNodeParams& params);
 
-  virtual ~RosTopicSubNode() 
+  virtual ~RosTopicSubNode()
   {
     signal_connection_.disconnect();
     // remove the subscribers from the static registry when the ALL the
@@ -168,7 +168,7 @@ class RosTopicSubNode : public BT::ConditionNode
    *
    * @param last_msg the latest message received, since the last tick.
    *                  Will be empty if no new message received.
-   * 
+   *
    * @return the new status of the Node, based on last_msg
    */
   virtual NodeStatus onTick(const std::shared_ptr<TopicT>& last_msg) = 0;
@@ -188,7 +188,7 @@ template<class T> inline
                                       const RosNodeParams& params)
     : BT::ConditionNode(instance_name, conf),
       node_(params.nh)
-{ 
+{
   // check port remapping
   auto portIt = config().input_ports.find("topic_name");
   if(portIt != config().input_ports.end())
@@ -252,7 +252,7 @@ template<class T> inline
     sub_instance_ = it->second;
     sub_instance_->init(node_, topic_name);
 
-    RCLCPP_INFO(logger(), 
+    RCLCPP_INFO(logger(),
       "Node [%s] created Subscriber to topic [%s]",
       name().c_str(), topic_name.c_str() );
   }
@@ -273,6 +273,10 @@ template<class T> inline
 template<class T> inline
   NodeStatus RosTopicSubNode<T>::tick()
 {
+  if (!rclcpp::ok())
+  {
+    return NodeStatus::FAILURE;
+  }
   // First, check if the subscriber_ is valid and that the name of the
   // topic_name in the port didn't change.
   // otherwise, create a new subscriber
@@ -280,14 +284,14 @@ template<class T> inline
   {
     std::string topic_name;
     getInput("topic_name", topic_name);
-    createSubscriber(topic_name); 
+    createSubscriber(topic_name);
   }
 
   auto CheckStatus = [](NodeStatus status)
   {
     if( !isStatusCompleted(status) )
     {
-      throw std::logic_error("RosTopicSubNode: the callback must return" 
+      throw std::logic_error("RosTopicSubNode: the callback must return"
                              "either SUCCESS or FAILURE");
     }
     return status;

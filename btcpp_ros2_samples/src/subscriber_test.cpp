@@ -12,9 +12,13 @@ public:
     : RosTopicSubNode<std_msgs::msg::String>(name, conf, params)
   {}
 
-  static BT::PortsList providedPorts()
+    static BT::PortsList providedPorts()
   {
-    return {};
+    BT::PortsList addition;
+    BT::PortsList basic = {};
+    basic.insert(addition.begin(), addition.end());
+
+    return providedBasicPorts(basic);
   }
 
   NodeStatus onTick(const std::shared_ptr<std_msgs::msg::String>& last_msg) override
@@ -32,9 +36,8 @@ public:
   <root BTCPP_format="4">
     <BehaviorTree>
       <Sequence>
-        <ReceiveString name="A"/>
-        <ReceiveString name="B"/>
-        <ReceiveString name="C"/>
+        <ReceiveString name="A" topic_name="A"/>
+        <ReceiveString name="B" topic_name="B"/>
       </Sequence>
     </BehaviorTree>
   </root>

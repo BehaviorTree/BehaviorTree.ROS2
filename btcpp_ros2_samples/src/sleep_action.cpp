@@ -10,9 +10,8 @@ bool SleepAction::setGoal(RosActionNode::Goal &goal)
 
 NodeStatus SleepAction::onResultReceived(const RosActionNode::WrappedResult &wr)
 {
-  RCLCPP_INFO( node_->get_logger(), "%s: onResultReceived. Done = %s", name().c_str(), 
+  RCLCPP_INFO( node_->get_logger(), "%s: onResultReceived. Done = %s", name().c_str(),
                wr.result->done ? "true" : "false" );
-
   return wr.result->done ? NodeStatus::SUCCESS : NodeStatus::FAILURE;
 }
 

@@ -27,7 +27,6 @@ public:
 
   bool setMessage(std_msgs::msg::String& msg)
   {
-    // RCLCPP_INFO(rclcpp::get_logger("test"), "publisher pointer: %p", reinterpret_cast<void*>(publisher_.get()));
     std::string user_message = "";
     getInput("message", user_message);
     msg.data = user_message;
@@ -41,7 +40,7 @@ public:
     <BehaviorTree>
       <Sequence>
         <SendString topic_name="A" message="call 1"/>
-        <SendString topic_name="A" message="call 2"/>
+        <SendString topic_name="B" message="call 2"/>
       </Sequence>
     </BehaviorTree>
   </root>

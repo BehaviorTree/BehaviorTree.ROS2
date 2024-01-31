@@ -352,6 +352,10 @@ template<class T> inline
     };
     //--------------------
 
+    // Check if server is ready
+    if(!action_client_->action_server_is_ready())
+      return onFailure(SERVER_UNREACHABLE);
+
     future_goal_handle_ = action_client_->async_send_goal( goal, goal_options );
     time_goal_sent_ = node_->now();
 

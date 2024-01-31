@@ -278,6 +278,10 @@ template<class T> inline
       return CheckStatus( onFailure(INVALID_REQUEST) );
     }
 
+    // Check if server is ready
+    if(!service_client_->service_is_ready())
+      return onFailure(SERVICE_UNREACHABLE);
+
     future_response_ = service_client_->async_send_request(request).share();
     time_request_sent_ = node_->now();
 

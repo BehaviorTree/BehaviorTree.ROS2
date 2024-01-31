@@ -69,7 +69,19 @@ public:
                          const BT::NodeConfig& conf,
                          const RosNodeParams& params);
 
-  virtual ~RosActionNode() = default;
+  virtual ~RosActionNode()
+  {
+    if (action_client_instance_) {
+      action_client_instance_.reset();
+      std::unique_lock lk(registryMutex());
+      auto& registry = getRegistry();
+      auto it = registry.find(action_client_key_);
+      if (it != registry.end() && it->second.use_count() <= 1){
+        registry.erase(it);
+        RCLCPP_INFO(logger(), "Remove action client [%s]", action_name_.c_str());
+      }
+    }
+  }
 
   /**
    * @brief Any subclass of RosActionNode that has ports must implement a
@@ -142,19 +154,54 @@ public:
   NodeStatus tick() override final;
 
 protected:
+  struct ActionClientInstance
+  {
+    void init(std::shared_ptr<rclcpp::Node> node, const std::string& action_name)
+    {
+      callback_group = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+      callback_group_executor.add_callback_group(callback_group, node->get_node_base_interface());
+      action_client = rclcpp_action::create_client<ActionT>(node, action_name, callback_group);
+    }
+
+    ActionClientPtr action_client;
+    rclcpp::CallbackGroup::SharedPtr callback_group;
+    rclcpp::executors::SingleThreadedExecutor callback_group_executor;
+    typename ActionClient::SendGoalOptions goal_options;
+  };
+
+  static std::mutex& registryMutex()
+  {
+    static std::mutex sub_mutex;
+    return sub_mutex;
+  }
+
+  static std::mutex& actionClientMutex()
+  {
+    static std::mutex action_client_mutex;
+    return action_client_mutex;
+  }
+
+  rclcpp::Logger logger()
+  {
+    return node_->get_logger();
+  }
+
+  // contains the fully-qualified name of the node and the name of the topic
+  static std::unordered_map<std::string, std::shared_ptr<ActionClientInstance>>& getRegistry()
+  {
+    static std::unordered_map<std::string, std::shared_ptr<ActionClientInstance>> action_clients_registry;
+    return action_clients_registry;
+  }
 
   std::shared_ptr<rclcpp::Node> node_;
-  std::string prev_action_name_;
+  std::shared_ptr<ActionClientInstance> action_client_instance_;
+  std::string action_name_;
   bool action_name_may_change_ = false;
   const std::chrono::milliseconds server_timeout_;
   const std::chrono::milliseconds wait_for_server_timeout_;
+  std::string action_client_key_;
 
 private:
-
-  ActionClientPtr action_client_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
-
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
 
@@ -232,17 +279,28 @@ template<class T> inline
     throw RuntimeError("action_name is empty");
   }
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+  std::unique_lock lk(registryMutex());
+  action_client_key_ = std::string(node_->get_fully_qualified_name()) + "/" + action_name;
 
-  prev_action_name_ = action_name;
+  auto& registry = getRegistry();
+  auto it = registry.find(action_client_key_);
+  if(it == registry.end())
+  {
+    it = registry.insert( {action_client_key_, std::make_shared<ActionClientInstance>()} ).first;
+    action_client_instance_ = it->second;
+    action_client_instance_->init(node_, action_name);
+  }
+  else{
+    action_client_instance_ = it->second;
+  }
 
-  bool found = action_client_->wait_for_action_server(wait_for_server_timeout_);
+  action_name_ = action_name;
+
+  bool found = action_client_instance_->action_client->wait_for_action_server(wait_for_server_timeout_);
   if(!found)
   {
     RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
-                 name().c_str(), prev_action_name_.c_str());
+                 name().c_str(), action_name_.c_str());
   }
   return found;
 }
@@ -259,11 +317,11 @@ template<class T> inline
   // First, check if the action_client_ is valid and that the name of the
   // action_name in the port didn't change.
   // otherwise, create a new client
-  if(!action_client_ || (status() == NodeStatus::IDLE && action_name_may_change_))
+  if(!action_client_instance_ || (status() == NodeStatus::IDLE && action_name_may_change_))
   {
     std::string action_name;
     getInput("action_name", action_name);
-    if(prev_action_name_ != action_name)
+    if(action_name_ != action_name)
     {
       createClient(action_name);
     }
@@ -334,7 +392,8 @@ template<class T> inline
     };
     //--------------------
 
-    future_goal_handle_ = action_client_->async_send_goal( goal, goal_options );
+    future_goal_handle_ = action_client_instance_->action_client->async_send_goal( goal, goal_options );
+
     time_goal_sent_ = node_->now();
 
     return NodeStatus::RUNNING;
@@ -342,7 +401,8 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    callback_group_executor_.spin_some();
+    std::unique_lock<std::mutex> lock(actionClientMutex());
+    action_client_instance_->callback_group_executor.spin_some();
 
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
@@ -350,7 +410,7 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      auto ret = callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay);
+      auto ret = action_client_instance_->callback_group_executor.spin_until_future_complete(future_goal_handle_, nodelay);
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
         if( (node_->now() - time_goal_sent_) > timeout )
@@ -411,26 +471,22 @@ template<class T> inline
 template<class T> inline
   void RosActionNode<T>::cancelGoal()
 {
-  auto future_result = action_client_->async_get_result(goal_handle_);
-  auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
+  auto future_result = action_client_instance_->action_client->async_get_result(goal_handle_);
+  auto future_cancel = action_client_instance_->action_client->async_cancel_goal(goal_handle_);
 
-  if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
+  if (action_client_instance_->callback_group_executor.spin_until_future_complete(future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
-                 prev_action_name_.c_str());
+                 action_name_.c_str());
   }
 
-  if (callback_group_executor_.spin_until_future_complete(future_result, server_timeout_) !=
+  if (action_client_instance_->callback_group_executor.spin_until_future_complete(future_result, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to get result call failed :( for [%s]",
-                 prev_action_name_.c_str());
+                 action_name_.c_str());
   }
 }
-
-
-
-
 }  // namespace BT
 

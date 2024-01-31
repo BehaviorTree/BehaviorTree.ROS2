@@ -50,7 +50,7 @@ public:
             <SleepAction name="sleepA" action_name="sleep_service" msec="2000"/>
             <PrintValue message="sleep completed"/>
             <Fallback>
-                <Timeout msec="2500">
+                <Timeout msec="1500">
                    <SleepAction name="sleepB" action_name="sleep_service" msec="2000"/>
                 </Timeout>
                 <PrintValue message="sleep aborted"/>

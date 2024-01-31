@@ -37,7 +37,7 @@ public:
     <BehaviorTree>
       <Sequence>
         <ReceiveString name="A" topic_name="A"/>
-        <ReceiveString name="B" topic_name="A"/>
+        <ReceiveString name="B" topic_name="B"/>
       </Sequence>
     </BehaviorTree>
   </root>

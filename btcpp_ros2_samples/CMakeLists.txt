@@ -23,12 +23,6 @@ add_executable(sleep_client
   src/sleep_client.cpp)
 ament_target_dependencies(sleep_client ${THIS_PACKAGE_DEPS})
 
-
-add_executable(sleep_client_shared
-  src/sleep_action_shared.cpp
-  src/sleep_client_shared.cpp)
-ament_target_dependencies(sleep_client_shared ${THIS_PACKAGE_DEPS})
-
 ######################################################
 # Build a client that call the sleep action (Plugin version)
 
@@ -51,16 +45,10 @@ ament_target_dependencies(sleep_server ${THIS_PACKAGE_DEPS})
 add_executable(subscriber_test src/subscriber_test.cpp)
 ament_target_dependencies(subscriber_test ${THIS_PACKAGE_DEPS})
 
-add_executable(subscriber_shared_test src/subscriber_shared_test.cpp)
-ament_target_dependencies(subscriber_shared_test ${THIS_PACKAGE_DEPS})
-
 ######################################################
 # Build publisher_tests
 add_executable(publisher_test src/publisher_test.cpp)
 ament_target_dependencies(publisher_test ${THIS_PACKAGE_DEPS})
-
-add_executable(publisher_shared_test src/publisher_test_shared.cpp)
-ament_target_dependencies(publisher_shared_test ${THIS_PACKAGE_DEPS})
 
 ######################################################
 # Build service_tests
@@ -70,25 +58,18 @@ ament_target_dependencies(add_two_ints_server ${THIS_PACKAGE_DEPS})
 add_executable(service_test src/service_test.cpp)
 ament_target_dependencies(service_test ${THIS_PACKAGE_DEPS})
 
-add_executable(service_shared_test src/service_shared_test.cpp)
-ament_target_dependencies(service_shared_test ${THIS_PACKAGE_DEPS})
-
 ######################################################
 # INSTALL
 
 install(TARGETS
   sleep_client
-  sleep_client_shared
   sleep_client_dyn
   sleep_server
   sleep_plugin
   subscriber_test
-  subscriber_shared_test
   publisher_test
-  publisher_shared_test
   add_two_ints_server
   service_test
-  service_shared_test
   DESTINATION lib/${PROJECT_NAME}
   )
 

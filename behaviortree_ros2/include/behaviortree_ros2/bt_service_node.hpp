@@ -22,10 +22,29 @@
 #include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
-#include "behaviortree_ros2/bt_service_error_code.hpp"
 
 namespace BT
 {
+enum ServiceNodeErrorCode
+{
+  SERVICE_UNREACHABLE,
+  SERVICE_TIMEOUT,
+  INVALID_REQUEST,
+  SERVICE_ABORTED
+};
+
+inline const char* toStr(const ServiceNodeErrorCode& err)
+{
+  switch (err)
+  {
+    case SERVICE_UNREACHABLE: return "SERVICE_UNREACHABLE";
+    case SERVICE_TIMEOUT: return "SERVICE_TIMEOUT";
+    case INVALID_REQUEST: return "INVALID_REQUEST";
+    case SERVICE_ABORTED: return "SERVICE_ABORTED";
+  }
+  return nullptr;
+}
+
 /**
  * @brief Abstract class use to wrap rclcpp::Client<>
  *

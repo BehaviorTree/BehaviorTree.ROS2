@@ -28,6 +28,30 @@
 
 namespace BT
 {
+enum ActionNodeErrorCode
+{
+  SERVER_UNREACHABLE,
+  SEND_GOAL_TIMEOUT,
+  GOAL_REJECTED_BY_SERVER,
+  ACTION_ABORTED,
+  ACTION_CANCELLED,
+  INVALID_GOAL
+};
+
+inline const char* toStr(const ActionNodeErrorCode& err)
+{
+  switch (err)
+  {
+    case SERVER_UNREACHABLE: return "SERVER_UNREACHABLE";
+    case SEND_GOAL_TIMEOUT: return "SEND_GOAL_TIMEOUT";
+    case GOAL_REJECTED_BY_SERVER: return "GOAL_REJECTED_BY_SERVER";
+    case ACTION_ABORTED: return "ACTION_ABORTED";
+    case ACTION_CANCELLED: return "ACTION_CANCELLED";
+    case INVALID_GOAL: return "INVALID_GOAL";
+  }
+  return nullptr;
+}
+
 /**
  * @brief Abstract class to wrap rclcpp_action::Client<>
  *

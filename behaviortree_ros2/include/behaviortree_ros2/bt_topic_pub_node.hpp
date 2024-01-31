@@ -104,9 +104,9 @@ protected:
   {
     void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
     {
-      publisher_ = node->create_publisher<TopicT>(topic_name, 1);
+      publisher = node->create_publisher<TopicT>(topic_name, 1);
     }
-    std::shared_ptr<Publisher> publisher_;
+    std::shared_ptr<Publisher> publisher;
   };
 
   static std::mutex& registryMutex()
@@ -244,8 +244,7 @@ template<class T> inline
   {
     return NodeStatus::FAILURE;
   }
-  pub_instance_->publisher_->publish(msg);
-  // publisher_->publish(msg);
+  pub_instance_->publisher->publish(msg);
   return NodeStatus::SUCCESS;
 }
 

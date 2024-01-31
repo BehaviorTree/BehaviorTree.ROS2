@@ -88,7 +88,7 @@ public:
       srv_instance_.reset();
       std::unique_lock lk(registryMutex());
       auto& registry = getRegistry();
-      auto it = registry.find(service_clientkey_);
+      auto it = registry.find(service_client_key_);
       if (it != registry.end() && it->second.use_count() <= 1){
         registry.erase(it);
         RCLCPP_INFO(logger(), "Remove service [%s]", service_name_.c_str());
@@ -188,7 +188,7 @@ protected:
   bool service_name_may_change_ = false;
   const std::chrono::milliseconds service_timeout_;
   const std::chrono::milliseconds wait_for_service_timeout_;
-  std::string service_clientkey_;
+  std::string service_client_key_;
 
   rclcpp::Logger logger()
   {
@@ -269,13 +269,13 @@ template<class T> inline
   }
 
   std::unique_lock lk(registryMutex());
-  service_clientkey_ = std::string(node_->get_fully_qualified_name()) + "/" + service_name;
+  service_client_key_ = std::string(node_->get_fully_qualified_name()) + "/" + service_name;
 
   auto& registry = getRegistry();
-  auto it = registry.find(service_clientkey_);
+  auto it = registry.find(service_client_key_);
   if (it == registry.end())
   {
-    it = registry.insert({service_clientkey_, std::make_shared<ServiceClientInstance>()}).first;
+    it = registry.insert({service_client_key_, std::make_shared<ServiceClientInstance>()}).first;
     srv_instance_ = it->second;
     srv_instance_->init(node_, service_name);
 

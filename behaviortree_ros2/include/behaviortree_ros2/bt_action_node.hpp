@@ -24,7 +24,6 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
-#include "behaviortree_ros2/bt_action_error_code.hpp"
 
 namespace BT
 {
@@ -95,14 +94,16 @@ public:
 
   virtual ~RosActionNode()
   {
-    if (action_client_instance_) {
+    if (action_client_instance_)
+    {
       action_client_instance_.reset();
-      std::unique_lock lk(registryMutex());
+      std::unique_lock lk(getMutex());
       auto& registry = getRegistry();
       auto it = registry.find(action_client_key_);
-      if (it != registry.end() && it->second.use_count() <= 1){
+      if (it != registry.end() && it->second.use_count() <= 1)
+      {
         registry.erase(it);
-        RCLCPP_INFO(logger(), "Remove action client [%s]", action_name_.c_str());
+        RCLCPP_INFO(logger(), "Removed action client [%s]", action_name_.c_str());
       }
     }
   }
@@ -193,13 +194,7 @@ protected:
     typename ActionClient::SendGoalOptions goal_options;
   };
 
-  static std::mutex& registryMutex()
-  {
-    static std::mutex sub_mutex;
-    return sub_mutex;
-  }
-
-  static std::mutex& actionClientMutex()
+  static std::mutex& getMutex()
   {
     static std::mutex action_client_mutex;
     return action_client_mutex;
@@ -213,7 +208,8 @@ protected:
   // contains the fully-qualified name of the node and the name of the topic
   static std::unordered_map<std::string, std::shared_ptr<ActionClientInstance>>& getRegistry()
   {
-    static std::unordered_map<std::string, std::shared_ptr<ActionClientInstance>> action_clients_registry;
+    static std::unordered_map<std::string, std::shared_ptr<ActionClientInstance>>
+      action_clients_registry;
     return action_clients_registry;
   }
 
@@ -303,7 +299,7 @@ template<class T> inline
     throw RuntimeError("action_name is empty");
   }
 
-  std::unique_lock lk(registryMutex());
+  std::unique_lock lk(getMutex());
   action_client_key_ = std::string(node_->get_fully_qualified_name()) + "/" + action_name;
 
   auto& registry = getRegistry();
@@ -425,7 +421,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    std::unique_lock<std::mutex> lock(actionClientMutex());
+    std::unique_lock<std::mutex> lock(getMutex());
     action_client_instance_->callback_group_executor.spin_some();
 
     // FIRST case: check if the goal request has a timeout

@@ -181,7 +181,7 @@ class RosTopicSubNode : public BT::ConditionNode
    * 
    * @return true will clear the message after ticking/processing.
    */
-  virtual bool clear_processed_message() { return true; }
+  virtual bool clearProcessedMessage() { return true; }
 
 private:
 
@@ -304,7 +304,7 @@ template<class T> inline
   };
   sub_instance_->callback_group_executor.spin_some();
   auto status = CheckStatus (onTick(last_msg_));
-  if (clear_processed_message())
+  if (clearProcessedMessage())
   {
     last_msg_ = nullptr;
   }

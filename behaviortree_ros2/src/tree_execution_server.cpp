@@ -20,13 +20,13 @@
 #include <thread>
 #endif
 
+// auto-generated header, created by generate_parameter_library
+#include "behaviortree_ros2/bt_executor_parameters.hpp"
 #include "behaviortree_ros2/tree_execution_server.hpp"
 #include "behaviortree_ros2/bt_utils.hpp"
 
 #include "behaviortree_cpp/loggers/groot2_publisher.h"
 
-// generated file
-#include "bt_executor_parameters.hpp"
 namespace
 {
 static const auto kLogger = rclcpp::get_logger("bt_action_server");

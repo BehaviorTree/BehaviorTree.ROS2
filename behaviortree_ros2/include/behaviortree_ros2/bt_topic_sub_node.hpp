@@ -14,12 +14,14 @@
 
 #pragma once
 
+#include <behaviortree_cpp/action_node.h>
+#include <behaviortree_cpp/basic_types.h>
 #include <memory>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/qos.hpp>
 #include <string>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
-#include "behaviortree_cpp/condition_node.h"
-#include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
 #include <boost/signals2.hpp>
@@ -42,7 +44,7 @@ namespace BT
  * 2. Otherwise, use the value in RosNodeParams::default_port_value
  */
 template <class TopicT>
-class RosTopicSubNode : public BT::ConditionNode
+class RosTopicSubNode : public BT::StatefulActionNode
 {
 public:
   // Type definitions
@@ -51,7 +53,9 @@ public:
 protected:
   struct SubscriberInstance
   {
-    SubscriberInstance(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name);
+    SubscriberInstance(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name,
+                       const std::size_t history_depth,
+                       const rclcpp::ReliabilityPolicy& reliability);
 
     std::shared_ptr<Subscriber> subscriber;
     rclcpp::CallbackGroup::SharedPtr callback_group;
@@ -131,9 +135,13 @@ public:
     return providedBasicPorts({});
   }
 
-  NodeStatus tick() override final;
+  NodeStatus onStart() override final;
 
-  /** Callback invoked in the tick. You must return either SUCCESS of FAILURE
+  NodeStatus onRunning() override final;
+
+  void onHalted() override final;
+
+  /** Callback invoked in the tick. You must return SUCCESS, FAILURE, or RUNNING.
    *
    * @param last_msg the latest message received, since the last tick.
    *                  Will be empty if no new message received.
@@ -157,6 +165,8 @@ public:
 
 private:
   bool createSubscriber(const std::string& topic_name);
+
+  NodeStatus checkStatus(const NodeStatus& status) const;
 };
 
 //----------------------------------------------------------------
@@ -164,7 +174,8 @@ private:
 //----------------------------------------------------------------
 template <class T>
 inline RosTopicSubNode<T>::SubscriberInstance::SubscriberInstance(
-    std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
+    std::shared_ptr<rclcpp::Node> node, const std::string& topic_name,
+    const std::size_t history_depth, const rclcpp::ReliabilityPolicy& reliability)
 {
   // create a callback group for this particular instance
   callback_group =
@@ -180,58 +191,24 @@ inline RosTopicSubNode<T>::SubscriberInstance::SubscriberInstance(
     last_msg = msg;
     broadcaster(msg);
   };
-  subscriber = node->create_subscription<T>(topic_name, 1, callback, option);
+  subscriber = node->create_subscription<T>(
+      topic_name, rclcpp::QoS(history_depth).reliability(reliability), callback, option);
 }
 
 template <class T>
 inline RosTopicSubNode<T>::RosTopicSubNode(const std::string& instance_name,
                                            const NodeConfig& conf,
                                            const RosNodeParams& params)
-  : BT::ConditionNode(instance_name, conf), node_(params.nh)
+  : BT::StatefulActionNode(instance_name, conf), node_(params.nh)
 {
-  // check port remapping
-  auto portIt = config().input_ports.find("topic_name");
-  if(portIt != config().input_ports.end())
+  // Check if default_port_value was used to provide a topic name.
+  if(!params.default_port_value.empty())
   {
-    const std::string& bb_topic_name = portIt->second;
+    topic_name_ = params.default_port_value;
+  }
 
-    if(bb_topic_name.empty() || bb_topic_name == "__default__placeholder__")
-    {
-      if(params.default_port_value.empty())
-      {
-        throw std::logic_error("Both [topic_name] in the InputPort and the RosNodeParams "
-                               "are empty.");
-      }
-      else
-      {
-        createSubscriber(params.default_port_value);
-      }
-    }
-    else if(!isBlackboardPointer(bb_topic_name))
-    {
-      // If the content of the port "topic_name" is not
-      // a pointer to the blackboard, but a static string, we can
-      // create the client in the constructor.
-      createSubscriber(bb_topic_name);
-    }
-    else
-    {
-      // do nothing
-      // createSubscriber will be invoked in the first tick().
-    }
-  }
-  else
-  {
-    if(params.default_port_value.empty())
-    {
-      throw std::logic_error("Both [topic_name] in the InputPort and the RosNodeParams "
-                             "are empty.");
-    }
-    else
-    {
-      createSubscriber(params.default_port_value);
-    }
-  }
+  // If no value was provided through the params, assume that the topic name will be set
+  // through a port when the node is first ticked.
 }
 
 template <class T>
@@ -243,11 +220,8 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
   }
   if(sub_instance_)
   {
-    throw RuntimeError("Can't call createSubscriber more than once");
+    throw RuntimeError("Subscriber already exists");
   }
-
-  // find SubscriberInstance in the registry
-  std::unique_lock lk(registryMutex());
 
   auto node = node_.lock();
   if(!node)
@@ -255,13 +229,44 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
     throw RuntimeError("The ROS node went out of scope. RosNodeParams doesn't take the "
                        "ownership of the node.");
   }
+
+  const auto publisher_info = node->get_publishers_info_by_topic(topic_name);
+  if(publisher_info.empty())
+  {
+    RCLCPP_INFO(logger(),
+                "No publisher found on topic [%s]. Deferring creation of subscriber "
+                "until publisher exists.",
+                topic_name_.c_str());
+    return false;
+  }
+
+  rclcpp::ReliabilityPolicy publisher_reliability =
+      publisher_info.at(0).qos_profile().reliability();
+  for(std::size_t i = 1; i < publisher_info.size(); i++)
+  {
+    if(publisher_reliability != publisher_info.at(i).qos_profile().reliability())
+    {
+      RCLCPP_WARN_ONCE(logger(),
+                       "Multiple publishers were found on topic [%s] with different QoS "
+                       "reliability policies. The subscriber will use the reliability "
+                       "setting from the first publisher it found, but this may result "
+                       "in undesirable behavior.",
+                       topic_name_.c_str());
+      break;
+    }
+  }
+
   subscriber_key_ = std::string(node->get_fully_qualified_name()) + "/" + topic_name;
+
+  // find SubscriberInstance in the registry
+  std::unique_lock lk(registryMutex());
 
   auto& registry = getRegistry();
   auto it = registry.find(subscriber_key_);
   if(it == registry.end() || it->second.expired())
   {
-    sub_instance_ = std::make_shared<SubscriberInstance>(node, topic_name);
+    sub_instance_ =
+        std::make_shared<SubscriberInstance>(node, topic_name, 1, publisher_reliability);
     registry.insert({ subscriber_key_, sub_instance_ });
 
     RCLCPP_INFO(logger(), "Node [%s] created Subscriber to topic [%s]", name().c_str(),
@@ -282,40 +287,57 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
   signal_connection_ = sub_instance_->broadcaster.connect(
       [this](const std::shared_ptr<T> msg) { last_msg_ = msg; });
 
-  topic_name_ = topic_name;
   return true;
 }
+template <class T>
+inline NodeStatus RosTopicSubNode<T>::checkStatus(const NodeStatus& status) const
+{
+  if(!isStatusActive(status))
+  {
+    throw std::logic_error("RosTopicSubNode: the callback must return SUCCESS, FAILURE, "
+                           "or RUNNING");
+  }
+  return status;
+};
 
 template <class T>
-inline NodeStatus RosTopicSubNode<T>::tick()
+inline NodeStatus RosTopicSubNode<T>::onStart()
 {
-  // First, check if the subscriber_ is valid and that the name of the
-  // topic_name in the port didn't change.
-  // otherwise, create a new subscriber
-  std::string topic_name;
-  getInput("topic_name", topic_name);
-
-  if(!topic_name.empty() && topic_name != "__default__placeholder__" &&
-     topic_name != topic_name_)
+  // If the topic name was provided through an input port, is a valid topic name, and is different
+  // from the stored topic name, update the stored topic name to the new string.
+  if(const auto topic_name = getInput<std::string>("topic_name");
+     topic_name.has_value() && !topic_name->empty() &&
+     topic_name.value() != "__default__placeholder__" && topic_name != topic_name_)
   {
-    sub_instance_.reset();
+    topic_name_ = topic_name.value();
   }
 
-  if(!sub_instance_)
+  // If we fail to create a subscriber, exit early and try again on the next tick
+  if(!createSubscriber(topic_name_))
   {
-    createSubscriber(topic_name);
+    return NodeStatus::RUNNING;
   }
 
-  auto CheckStatus = [](NodeStatus status) {
-    if(!isStatusCompleted(status))
-    {
-      throw std::logic_error("RosTopicSubNode: the callback must return"
-                             "either SUCCESS or FAILURE");
-    }
-    return status;
-  };
+  // Discard any previous message unless latching is enabled.
+  // This enforces that the message must have been received after the current call to onStart(), even if this node has been ticked to completion previously.
+  if(!latchLastMessage())
+  {
+    last_msg_.reset();
+  }
+
+  // NOTE(schornakj): Something weird is happening here that prevents the subscriber from receiving a message if the publisher both initializes and publishes a message in between ticks.
+  // I think it has to do with the discovery process between the publisher and subscriber and how that relates to events being handled by the executor.
+  // This might depend on the middleware implemenation too.
+
   sub_instance_->callback_group_executor.spin_some();
-  auto status = CheckStatus(onTick(last_msg_));
+
+  // If no message was received, return RUNNING
+  if(last_msg_ == nullptr)
+  {
+    return NodeStatus::RUNNING;
+  }
+
+  auto status = checkStatus(onTick(last_msg_));
   if(!latchLastMessage())
   {
     last_msg_.reset();
@@ -323,4 +345,35 @@ inline NodeStatus RosTopicSubNode<T>::tick()
   return status;
 }
 
+template <class T>
+inline NodeStatus RosTopicSubNode<T>::onRunning()
+{
+  // If the subscriber wasn't initialized during onStart(), attempt to create it here.
+  if(!sub_instance_)
+  {
+    // If the subscriber still cannot be created, return RUNNING and try again on the next tick.
+    if(!createSubscriber(topic_name_))
+    {
+      return NodeStatus::RUNNING;
+    }
+  }
+
+  sub_instance_->callback_group_executor.spin_some();
+
+  // If no message was received, return RUNNING
+  if(last_msg_ == nullptr)
+  {
+    return NodeStatus::RUNNING;
+  }
+
+  // TODO(schornakj): handle timeout here
+
+  auto status = checkStatus(onTick(last_msg_));
+
+  return status;
+}
+
+template <class T>
+inline void RosTopicSubNode<T>::onHalted()
+{}
 }  // namespace BT

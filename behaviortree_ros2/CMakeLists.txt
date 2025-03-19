@@ -37,6 +37,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME}  bt_executor_parameters)
 
+if (BUILD_TESTING)
+    add_subdirectory(test)
+endif()
 
 ######################################################
 # INSTALL

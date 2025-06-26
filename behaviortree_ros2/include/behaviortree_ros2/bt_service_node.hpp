@@ -228,7 +228,7 @@ inline RosServiceNode<T>::RosServiceNode(const std::string& instance_name,
                                          const RosNodeParams& params)
   : BT::ActionNodeBase(instance_name, conf)
   , node_(params.nh)
-  , service_timeout_(std::chrono::duration(10s))  // )(params.server_timeout)
+  , service_timeout_(std::chrono::duration(params.server_timeout))
   , wait_for_service_timeout_(params.wait_for_server_timeout)
 {
   // check port remapping

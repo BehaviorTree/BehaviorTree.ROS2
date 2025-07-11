@@ -176,7 +176,7 @@ inline NodeStatus RosTopicPubNode<T>::tick()
     getInput("topic_name", topic_name);
     if(prev_topic_name_ != topic_name)
     {
-      createPublisher(topic_name, qos_);
+      createPublisher(topic_name);
     }
   }
 

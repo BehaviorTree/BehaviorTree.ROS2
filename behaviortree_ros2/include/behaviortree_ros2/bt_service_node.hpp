@@ -144,7 +144,7 @@ protected:
   {
     ServiceClientInstance(std::shared_ptr<rclcpp::Node> node,
                           const std::string& service_name,
-                          const rmw_qos_profile_t& qos_profile);
+                          const rclcpp::QoS& qos);
 
     ServiceClientPtr service_client;
     rclcpp::CallbackGroup::SharedPtr callback_group;
@@ -189,7 +189,7 @@ protected:
 
   std::weak_ptr<rclcpp::Node> node_;
   std::string service_name_;
-  rmw_qos_profile_t qos_profile_;
+  rclcpp::QoS qos_;
   bool service_name_should_be_checked_ = false;
   const std::chrono::milliseconds service_timeout_;
   const std::chrono::milliseconds wait_for_service_timeout_;
@@ -213,13 +213,13 @@ private:
 template <class T>
 inline RosServiceNode<T>::ServiceClientInstance::ServiceClientInstance(
     std::shared_ptr<rclcpp::Node> node, const std::string& service_name,
-    const rmw_qos_profile_t& qos_profile)
+    const rclcpp::QoS& qos)
 {
   callback_group =
       node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
   callback_executor.add_callback_group(callback_group, node->get_node_base_interface());
 
-  service_client = node->create_client<T>(service_name, qos_profile, callback_group);
+  service_client = node->create_client<T>(service_name, qos, callback_group);
 }
 
 template <class T>
@@ -230,7 +230,7 @@ inline RosServiceNode<T>::RosServiceNode(const std::string& instance_name,
   , node_(params.nh)
   , service_timeout_(params.server_timeout)
   , wait_for_service_timeout_(params.wait_for_server_timeout)
-  , qos_profile_(params.service_qos_profile)
+  , qos_(params.service_qos)
 {
   // check port remapping
   auto portIt = config().input_ports.find("service_name");
@@ -278,7 +278,7 @@ inline bool RosServiceNode<T>::createClient(const std::string& service_name)
   if(it == registry.end() || it->second.expired())
   {
     srv_instance_ =
-        std::make_shared<ServiceClientInstance>(node, service_name, qos_profile_);
+        std::make_shared<ServiceClientInstance>(node, service_name, qos_);
     registry.insert({ client_key, srv_instance_ });
 
     RCLCPP_INFO(logger(), "Node [%s] created service client [%s]", name().c_str(),

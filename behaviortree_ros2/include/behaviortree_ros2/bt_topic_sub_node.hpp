@@ -314,7 +314,24 @@ inline NodeStatus RosTopicSubNode<T>::tick()
     }
     return status;
   };
-  sub_instance_->callback_group_executor.spin_some();
+  // Spin with timeout until message is available
+  if (!last_msg_) 
+  {
+    auto start_time = std::chrono::steady_clock::now();
+    const auto timeout = std::chrono::milliseconds(50); // 50ms timeout
+    
+    while (!last_msg_ && (std::chrono::steady_clock::now() - start_time) < timeout) 
+    {
+      sub_instance_->callback_group_executor.spin_some();
+      if (!last_msg_) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    }
+  } 
+  else 
+  {
+    sub_instance_->callback_group_executor.spin_some();
+  }
   auto status = CheckStatus(onTick(last_msg_));
   if(!latchLastMessage())
   {

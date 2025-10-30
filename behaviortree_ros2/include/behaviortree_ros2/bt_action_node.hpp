@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <optional>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
 #include "behaviortree_cpp/action_node.h"
@@ -156,8 +157,15 @@ public:
   }
 
   /** Callback invoked when something goes wrong.
+   * The result is provided if it is available.
    * It must return either SUCCESS or FAILURE.
    */
+  virtual BT::NodeStatus onFailure(ActionNodeErrorCode error,
+                                   const std::optional<WrappedResult>&)
+  {
+    return onFailure(error);
+  }
+
   virtual BT::NodeStatus onFailure(ActionNodeErrorCode /*error*/)
   {
     return NodeStatus::FAILURE;
@@ -394,7 +402,7 @@ inline NodeStatus RosActionNode<T>::tick()
 
     if(!setGoal(goal))
     {
-      return CheckStatus(onFailure(INVALID_GOAL));
+      return CheckStatus(onFailure(INVALID_GOAL, {}));
     }
 
     typename ActionClient::SendGoalOptions goal_options;
@@ -437,7 +445,7 @@ inline NodeStatus RosActionNode<T>::tick()
     // Check if server is ready
     if(!action_client->action_server_is_ready())
     {
-      return onFailure(SERVER_UNREACHABLE);
+      return onFailure(SERVER_UNREACHABLE, {});
     }
 
     future_goal_handle_ = action_client->async_send_goal(goal, goal_options);
@@ -464,7 +472,7 @@ inline NodeStatus RosActionNode<T>::tick()
       {
         if((now() - time_goal_sent_) > timeout)
         {
-          return CheckStatus(onFailure(SEND_GOAL_TIMEOUT));
+          return CheckStatus(onFailure(SEND_GOAL_TIMEOUT, {}));
         }
         else
         {
@@ -495,11 +503,11 @@ inline NodeStatus RosActionNode<T>::tick()
     {
       if(result_.code == rclcpp_action::ResultCode::ABORTED)
       {
-        return CheckStatus(onFailure(ACTION_ABORTED));
+        return CheckStatus(onFailure(ACTION_ABORTED, result_));
       }
       else if(result_.code == rclcpp_action::ResultCode::CANCELED)
       {
-        return CheckStatus(onFailure(ACTION_CANCELLED));
+        return CheckStatus(onFailure(ACTION_CANCELLED, result_));
       }
       else
       {

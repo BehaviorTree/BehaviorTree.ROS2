@@ -27,7 +27,8 @@ generate_parameter_library(
 add_library(${PROJECT_NAME}
     src/bt_ros2.cpp
     src/bt_utils.cpp
-    src/tree_execution_server.cpp )
+    src/tree_execution_server.cpp
+    src/bt_ros_logger.cpp )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

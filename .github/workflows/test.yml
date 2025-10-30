@@ -19,10 +19,10 @@ jobs:
     steps:
     - name: Build and run tests
       id: action-ros-ci
-      uses: ros-tooling/action-ros-ci@v0.3
+      uses: ros-tooling/action-ros-ci@v0.4
       with:
         target-ros2-distro: ${{ matrix.ros_distro }}
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v4
       with:
         name: colcon-logs
         path: ros_ws/log

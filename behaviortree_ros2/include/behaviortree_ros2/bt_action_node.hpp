@@ -309,7 +309,7 @@ inline bool RosActionNode<T>::createClient(const std::string& action_name)
   if(it == registry.end() || it->second.expired())
   {
     client_instance_ = std::make_shared<ActionClientInstance>(node, action_name);
-    registry.insert({ action_client_key_, client_instance_ });
+    registry.insert_or_assign( action_client_key_, client_instance_ );
   }
   else
   {

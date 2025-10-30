@@ -283,7 +283,7 @@ inline bool RosServiceNode<T>::createClient(const std::string& service_name)
   if(it == registry.end() || it->second.expired())
   {
     srv_instance_ = std::make_shared<ServiceClientInstance>(node, service_name);
-    registry.insert({ client_key, srv_instance_ });
+    registry.insert_or_assign( client_key, srv_instance_ );
 
     RCLCPP_INFO(logger(), "Node [%s] created service client [%s]", name().c_str(),
                 service_name.c_str());

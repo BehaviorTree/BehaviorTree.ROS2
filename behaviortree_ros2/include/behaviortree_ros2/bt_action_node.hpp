@@ -434,7 +434,6 @@ inline NodeStatus RosActionNode<T>::tick()
           if(!goal_handle_)
           {
             RCLCPP_ERROR(logger(), "Goal was rejected by server");
-            return onFailure(GOAL_REJECTED_BY_SERVER);
           }
           else
           {

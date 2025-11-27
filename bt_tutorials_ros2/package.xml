@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>bt_tutorials_ros2</name>
+  <version>0.0.0</version>
+  <description>Implementation of the Integration with ROS2 Tutorials from the behaviortree.dev Website</description>
+  <maintainer email="janak.panthi3@gmail.com">Janak Panthi</maintainer>
+  <license>MIT</license>
+  <author>Janak Panthi</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>action_tutorials_interfaces</depend>
+  <depend>example_interfaces</depend>
+  <depend>behaviortree_cpp</depend>
+  <depend>behaviortree_ros2</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

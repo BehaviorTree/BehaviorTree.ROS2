@@ -23,4 +23,6 @@ public:
   BT::NodeStatus onResultReceived(const WrappedResult& wr) override;
 
   virtual BT::NodeStatus onFailure(ActionNodeErrorCode error) override;
+
+  virtual BT::NodeStatus onFeedback(const std::shared_ptr<const Feedback> feedback) override;
 };

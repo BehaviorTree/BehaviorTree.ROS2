@@ -218,6 +218,16 @@ protected:
     return rclcpp::Clock(RCL_ROS_TIME).now();
   }
 
+  rclcpp::Clock::SharedPtr clock()
+  {
+    if(auto node = node_.lock())
+    {
+      return node->get_clock();
+    }
+    static auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+    return clock;
+  }
+
   using ClientsRegistry =
       std::unordered_map<std::string, std::weak_ptr<ActionClientInstance>>;
   // contains the fully-qualified name of the node and the name of the client

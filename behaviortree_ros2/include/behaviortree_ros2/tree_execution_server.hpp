@@ -112,6 +112,21 @@ protected:
   {}
 
   /**
+   * @brief onLoopBeforeTick invoked at each loop, before tree.tickOnce().
+   * It can be overridden to avoid ticking the tree without blocking the
+   * rest of the execute loop.
+   *
+   * Consider whether it's better to inject a preTickCallback to the root node
+   * or another node of the behavior tree.
+   *
+   * @return False to skip the tick.
+   */
+  virtual bool onLoopBeforeTick()
+  {
+    return true;
+  }
+
+  /**
    * @brief onLoopAfterTick invoked at each loop, after tree.tickOnce().
    * If it returns a valid NodeStatus, the tree will stop and return that status.
    * Return std::nullopt to continue the execution.

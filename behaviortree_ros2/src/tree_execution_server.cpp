@@ -234,21 +234,24 @@ void TreeExecutionServer::execute(
         return;
       }
 
-      // tick the tree once and publish the action feedback
-      status = p_->tree.tickExactlyOnce();
-
-      if(const auto res = onLoopAfterTick(status); res.has_value())
+      if(onLoopBeforeTick())
       {
-        stop_action(res.value(), "Action Server aborted by onLoopAfterTick()");
-        goal_handle->abort(action_result);
-        return;
-      }
+        // tick the tree once and publish the action feedback
+        status = p_->tree.tickExactlyOnce();
 
-      if(const auto res = onLoopFeedback(); res.has_value())
-      {
-        auto feedback = std::make_shared<ExecuteTree::Feedback>();
-        feedback->message = res.value();
-        goal_handle->publish_feedback(feedback);
+        if(const auto res = onLoopAfterTick(status); res.has_value())
+        {
+          stop_action(res.value(), "Action Server aborted by onLoopAfterTick()");
+          goal_handle->abort(action_result);
+          return;
+        }
+
+        if(const auto res = onLoopFeedback(); res.has_value())
+        {
+          auto feedback = std::make_shared<ExecuteTree::Feedback>();
+          feedback->message = res.value();
+          goal_handle->publish_feedback(feedback);
+        }
       }
 
       const auto now = std::chrono::steady_clock::now();

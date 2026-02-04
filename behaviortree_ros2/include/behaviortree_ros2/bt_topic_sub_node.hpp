@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
 #include "behaviortree_cpp/condition_node.h"
@@ -314,7 +316,21 @@ inline NodeStatus RosTopicSubNode<T>::tick()
     }
     return status;
   };
-  sub_instance_->callback_group_executor.spin_some();
+  // Spin a few times so a message has a chance to be delivered and processed
+  // (helps when this executor is only run from tick() and not from a background
+  // executor).
+  for (int i = 0; i < 20; ++i)
+  {
+    sub_instance_->callback_group_executor.spin_some();
+    if (last_msg_ && latchLastMessage())
+    {
+      break;
+    }
+    if (i < 19)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
   auto status = CheckStatus(onTick(last_msg_));
   if(!latchLastMessage())
   {

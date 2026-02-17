@@ -38,10 +38,20 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     rclcpp::rclcpp
     rclcpp_action::rclcpp_action
     ament_index_cpp::ament_index_cpp
-    behaviortree_cpp::behaviortree_cpp
     ${btcpp_ros2_interfaces_TARGETS}
     bt_executor_parameters
 )
+
+if(TARGET BT::behaviortree_cpp)
+  target_link_libraries(${PROJECT_NAME} PUBLIC BT::behaviortree_cpp)
+elseif(TARGET behaviortree_cpp::behaviortree_cpp)
+  target_link_libraries(${PROJECT_NAME} PUBLIC behaviortree_cpp::behaviortree_cpp)
+else()
+  message(FATAL_ERROR
+    "behaviortree_cpp was found, but it did not export a known CMake target. "
+    "Expected BT::behaviortree_cpp or behaviortree_cpp::behaviortree_cpp."
+  )
+endif()
 
 
 ######################################################

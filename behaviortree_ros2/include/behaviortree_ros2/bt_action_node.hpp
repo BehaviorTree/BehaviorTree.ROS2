@@ -186,7 +186,8 @@ protected:
   struct ActionClientInstance
   {
     ActionClientInstance(std::shared_ptr<rclcpp::Node> node,
-                         const std::string& action_name);
+                         const std::string& action_name,
+                         const rcl_action_client_options_t& action_client_options);
 
     ActionClientPtr action_client;
     rclcpp::CallbackGroup::SharedPtr callback_group;
@@ -234,6 +235,7 @@ protected:
   const std::chrono::milliseconds server_timeout_;
   const std::chrono::milliseconds wait_for_server_timeout_;
   std::string action_client_key_;
+  rcl_action_client_options_t action_client_options_;
 
 private:
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
@@ -253,12 +255,14 @@ private:
 
 template <class T>
 RosActionNode<T>::ActionClientInstance::ActionClientInstance(
-    std::shared_ptr<rclcpp::Node> node, const std::string& action_name)
+    std::shared_ptr<rclcpp::Node> node, const std::string& action_name,
+    const rcl_action_client_options_t& action_client_options)
 {
   callback_group =
       node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
   callback_executor.add_callback_group(callback_group, node->get_node_base_interface());
-  action_client = rclcpp_action::create_client<T>(node, action_name, callback_group);
+  action_client = rclcpp_action::create_client<T>(node, action_name, callback_group,
+                                                  action_client_options);
 }
 
 template <class T>
@@ -269,6 +273,7 @@ inline RosActionNode<T>::RosActionNode(const std::string& instance_name,
   , node_(params.nh)
   , server_timeout_(params.server_timeout)
   , wait_for_server_timeout_(params.wait_for_server_timeout)
+  , action_client_options_(params.action_client_options)
 {
   // Three cases:
   // - we use the default action_name in RosNodeParams when port is empty
@@ -320,8 +325,9 @@ inline bool RosActionNode<T>::createClient(const std::string& action_name)
   auto it = registry.find(action_client_key_);
   if(it == registry.end() || it->second.expired())
   {
-    client_instance_ = std::make_shared<ActionClientInstance>(node, action_name);
-    registry.insert_or_assign(action_client_key_, client_instance_);
+    client_instance_ =
+        std::make_shared<ActionClientInstance>(node, action_name, action_client_options_);
+    registry.insert_or_assign({ action_client_key_, client_instance_ });
   }
   else
   {

@@ -51,7 +51,8 @@ public:
 protected:
   struct SubscriberInstance
   {
-    SubscriberInstance(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name);
+    SubscriberInstance(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name,
+                       const rclcpp::QoS& qos);
 
     std::shared_ptr<Subscriber> subscriber;
     rclcpp::CallbackGroup::SharedPtr callback_group;
@@ -80,6 +81,7 @@ protected:
   std::shared_ptr<SubscriberInstance> sub_instance_;
   std::shared_ptr<TopicT> last_msg_;
   std::string topic_name_;
+  rclcpp::QoS qos_;
   boost::signals2::connection signal_connection_;
   std::string subscriber_key_;
 
@@ -164,7 +166,8 @@ private:
 //----------------------------------------------------------------
 template <class T>
 inline RosTopicSubNode<T>::SubscriberInstance::SubscriberInstance(
-    std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
+    std::shared_ptr<rclcpp::Node> node, const std::string& topic_name,
+    const rclcpp::QoS& qos)
 {
   // create a callback group for this particular instance
   callback_group =
@@ -180,14 +183,14 @@ inline RosTopicSubNode<T>::SubscriberInstance::SubscriberInstance(
     last_msg = msg;
     broadcaster(msg);
   };
-  subscriber = node->create_subscription<T>(topic_name, 1, callback, option);
+  subscriber = node->create_subscription<T>(topic_name, qos, callback, option);
 }
 
 template <class T>
 inline RosTopicSubNode<T>::RosTopicSubNode(const std::string& instance_name,
                                            const NodeConfig& conf,
                                            const RosNodeParams& params)
-  : BT::ConditionNode(instance_name, conf), node_(params.nh)
+  : BT::ConditionNode(instance_name, conf), node_(params.nh), qos_(params.topic_qos)
 {
   // check port remapping
   auto portIt = config().input_ports.find("topic_name");
@@ -261,8 +264,8 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
   auto it = registry.find(subscriber_key_);
   if(it == registry.end() || it->second.expired())
   {
-    sub_instance_ = std::make_shared<SubscriberInstance>(node, topic_name);
-    registry.insert_or_assign(subscriber_key_, sub_instance_);
+    sub_instance_ = std::make_shared<SubscriberInstance>(node, topic_name, qos_);
+    registry.insert_or_assign({ subscriber_key_, sub_instance_ });
 
     RCLCPP_INFO(logger(), "Node [%s] created Subscriber to topic [%s]", name().c_str(),
                 topic_name.c_str());

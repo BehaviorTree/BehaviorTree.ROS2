@@ -88,6 +88,7 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_topic_name_;
   bool topic_name_may_change_ = false;
+  rclcpp::QoS qos_;
 
 private:
   std::shared_ptr<Publisher> publisher_;
@@ -103,7 +104,7 @@ template <class T>
 inline RosTopicPubNode<T>::RosTopicPubNode(const std::string& instance_name,
                                            const NodeConfig& conf,
                                            const RosNodeParams& params)
-  : BT::ConditionNode(instance_name, conf), node_(params.nh)
+  : BT::ConditionNode(instance_name, conf), node_(params.nh), qos_(params.topic_qos)
 {
   // check port remapping
   auto portIt = config().input_ports.find("topic_name");
@@ -158,7 +159,7 @@ inline bool RosTopicPubNode<T>::createPublisher(const std::string& topic_name)
     throw RuntimeError("topic_name is empty");
   }
 
-  publisher_ = node_->create_publisher<T>(topic_name, 1);
+  publisher_ = node_->create_publisher<T>(topic_name, qos_);
   prev_topic_name_ = topic_name;
   return true;
 }

@@ -27,15 +27,21 @@ generate_parameter_library(
 add_library(${PROJECT_NAME}
     src/bt_ros2.cpp
     src/bt_utils.cpp
-    src/tree_execution_server.cpp )
-
-ament_target_dependencies(${PROJECT_NAME} ${THIS_PACKAGE_DEPS})
+    src/tree_execution_server.cpp
+    src/bt_ros_logger.cpp )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(${PROJECT_NAME}  bt_executor_parameters)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    rclcpp::rclcpp
+    rclcpp_action::rclcpp_action
+    ament_index_cpp::ament_index_cpp
+    behaviortree_cpp::behaviortree_cpp
+    ${btcpp_ros2_interfaces_TARGETS}
+    bt_executor_parameters
+)
 
 
 ######################################################

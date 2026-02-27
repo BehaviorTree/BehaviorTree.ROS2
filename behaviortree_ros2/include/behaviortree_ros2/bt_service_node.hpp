@@ -19,6 +19,8 @@
 #include <string>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/allocator/allocator_common.hpp>
+#include <rclcpp/version.h>
+#include <rclcpp/qos.hpp>
 #include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
@@ -219,7 +221,14 @@ inline RosServiceNode<T>::ServiceClientInstance::ServiceClientInstance(
       node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
   callback_executor.add_callback_group(callback_group, node->get_node_base_interface());
 
-  service_client = node->create_client<T>(service_name, qos, callback_group);
+// For Jazzy and Later Support
+#if RCLCPP_VERSION_GTE(28, 0, 0)
+  service_client =
+      node->create_client<T>(service_name, qos, callback_group);
+#else
+  service_client = node->create_client<T>(service_name, rmw_qos_profile_services_default,
+                                          callback_group);
+#endif
 }
 
 template <class T>
@@ -279,7 +288,7 @@ inline bool RosServiceNode<T>::createClient(const std::string& service_name)
   {
     srv_instance_ =
         std::make_shared<ServiceClientInstance>(node, service_name, qos_);
-    registry.insert({ client_key, srv_instance_ });
+    registry.insert_or_assign({ client_key, srv_instance_ });
 
     RCLCPP_INFO(logger(), "Node [%s] created service client [%s]", name().c_str(),
                 service_name.c_str());

@@ -265,7 +265,7 @@ inline bool RosTopicSubNode<T>::createSubscriber(const std::string& topic_name)
   if(it == registry.end() || it->second.expired())
   {
     sub_instance_ = std::make_shared<SubscriberInstance>(node, topic_name, qos_);
-    registry.insert({ subscriber_key_, sub_instance_ });
+    registry.insert_or_assign({ subscriber_key_, sub_instance_ });
 
     RCLCPP_INFO(logger(), "Node [%s] created Subscriber to topic [%s]", name().c_str(),
                 topic_name.c_str());

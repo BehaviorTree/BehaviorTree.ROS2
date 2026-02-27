@@ -5,11 +5,11 @@ Default Config
 bt_server:
   ros__parameters:
     action_name: bt_execution
-    behavior_trees: '{}'
-    groot2_port: 1667.0
-    plugins: '{}'
-    ros_plugins_timeout: 1000.0
-    tick_frequency: 100.0
+    behavior_trees: []
+    groot2_port: 1667
+    plugins: []
+    ros_plugins_timeout: 1000
+    tick_frequency: 100
 
 ```
 

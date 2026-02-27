@@ -9,6 +9,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(btcpp_ros2_interfaces
     "msg/NodeStatus.msg"
+    "srv/GetTrees.srv"
     "action/ExecuteTree.action"
     "action/Sleep.action")
 

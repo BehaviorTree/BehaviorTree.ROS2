@@ -251,13 +251,20 @@ void TreeExecutionServer::execute(
         goal_handle->publish_feedback(feedback);
       }
 
-      const auto now = std::chrono::steady_clock::now();
+      auto now = std::chrono::steady_clock::now();
       if(now < loop_deadline)
       {
         p_->tree.sleep(std::chrono::duration_cast<std::chrono::system_clock::duration>(
             loop_deadline - now));
+        now = std::chrono::steady_clock::now();
       }
-      loop_deadline += period;
+      // If sleep was woken early, it will still be before the next deadline
+      // so it might still be necessary to wait for it. Only advance to the
+      // next deadline if one has passed.
+      if(now >= loop_deadline)
+      {
+        loop_deadline += period;
+      }
     }
   }
   catch(const std::exception& ex)

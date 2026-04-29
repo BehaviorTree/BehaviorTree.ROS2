@@ -62,4 +62,13 @@ install(
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_cancel_goal_race
+    test/test_cancel_goal_race.cpp)
+  target_link_libraries(test_cancel_goal_race
+    ${PROJECT_NAME})
+endif()
+
 ament_package()

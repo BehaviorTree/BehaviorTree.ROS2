@@ -23,6 +23,7 @@
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "rclcpp_action/exceptions.hpp"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
 
@@ -558,21 +559,35 @@ inline void RosActionNode<T>::cancelGoal()
 
   auto& action_client = client_instance_->action_client;
 
-  auto future_result = action_client->async_get_result(goal_handle_);
-  auto future_cancel = action_client->async_cancel_goal(goal_handle_);
-
-  constexpr auto SUCCESS = rclcpp::FutureReturnCode::SUCCESS;
-
-  if(executor.spin_until_future_complete(future_cancel, server_timeout_) != SUCCESS)
+  try
   {
-    RCLCPP_ERROR(logger(), "Failed to cancel action server for [%s]",
-                 action_name_.c_str());
+    auto future_result = action_client->async_get_result(goal_handle_);
+    auto future_cancel = action_client->async_cancel_goal(goal_handle_);
+
+    constexpr auto SUCCESS = rclcpp::FutureReturnCode::SUCCESS;
+
+    if(executor.spin_until_future_complete(future_cancel, server_timeout_) != SUCCESS)
+    {
+      RCLCPP_ERROR(logger(), "Failed to cancel action server for [%s]",
+                   action_name_.c_str());
+    }
+
+    if(executor.spin_until_future_complete(future_result, server_timeout_) != SUCCESS)
+    {
+      RCLCPP_ERROR(logger(), "Failed to get result call failed :( for [%s]",
+                   action_name_.c_str());
+    }
   }
-
-  if(executor.spin_until_future_complete(future_result, server_timeout_) != SUCCESS)
+  catch(const rclcpp_action::exceptions::UnknownGoalHandleError& e)
   {
-    RCLCPP_ERROR(logger(), "Failed to get result call failed :( for [%s]",
-                 action_name_.c_str());
+    // The action server's terminal result arrived and the rclcpp_action
+    // client's result callback has already erased the goal from its
+    // internal registry before we reached async_get_result /
+    // async_cancel_goal. This is a benign race: the goal has already
+    // reached a terminal state, which is exactly what cancelGoal is
+    // trying to achieve.
+    RCLCPP_DEBUG(logger(), "Goal already terminal at cancel time for [%s]: %s",
+                 action_name_.c_str(), e.what());
   }
 }
 

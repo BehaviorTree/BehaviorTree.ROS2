@@ -113,10 +113,10 @@ void TreeExecutionServer::executeRegistration()
   p_->factory.clearRegisteredBehaviorTrees();
 
   p_->params = p_->param_listener->get_params();
-  // user defined method
-  registerNodesIntoFactory(p_->factory);
   // load plugins from multiple directories
   RegisterPlugins(p_->params, p_->factory, node_);
+  // user defined method
+  registerNodesIntoFactory(p_->factory);
   // load trees (XML) from multiple directories
   RegisterBehaviorTrees(p_->params, p_->factory, node_);
 

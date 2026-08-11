@@ -524,6 +524,7 @@ inline void RosActionNode<T>::halt()
   {
     cancelGoal();
     onHalt();
+    resetStatus();
   }
 }
 

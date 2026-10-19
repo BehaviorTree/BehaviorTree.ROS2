@@ -18,9 +18,9 @@ bt_server:
     type: int,
     default_value: 1667,
     read_only: true,
-    description: "Server port value to publish Groot2 messages on",
+    description: "Server port value to publish Groot2 messages on. Set to 0 to disable.",
     validation: {
-      bounds<>: [1, 49151]
+      bounds<>: [0, 49151]
     }
   }
   plugins: {

@@ -199,8 +199,11 @@ void TreeExecutionServer::execute(
     // call user defined function after the tree has been created
     onTreeCreated(p_->tree);
     p_->groot_publisher.reset();
-    p_->groot_publisher =
-        std::make_shared<BT::Groot2Publisher>(p_->tree, p_->params.groot2_port);
+    const auto groot2_port = p_->params.groot2_port;
+    if(groot2_port > 0)
+    {
+      p_->groot_publisher = std::make_shared<BT::Groot2Publisher>(p_->tree, groot2_port);
+    }
 
     // Loop until the tree is done or a cancel is requested
     const auto period =

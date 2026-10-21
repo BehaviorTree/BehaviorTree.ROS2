@@ -105,7 +105,17 @@ TreeExecutionServer::TreeExecutionServer(const rclcpp::Node::SharedPtr& node)
 }
 
 TreeExecutionServer::~TreeExecutionServer()
-{}
+{
+  if(p_->single_shot_timer)
+  {
+    p_->single_shot_timer->cancel();
+  }
+
+  if(p_->action_thread.joinable())
+  {
+    p_->action_thread.join();
+  }
+}
 
 void TreeExecutionServer::executeRegistration()
 {
@@ -209,12 +219,12 @@ void TreeExecutionServer::execute(
 
     // operations to be done if the tree execution is aborted, either by
     // cancel requested or by onLoopAfterTick()
-    auto stop_action = [this, &action_result](BT::NodeStatus status,
+    auto stop_action = [this, &action_result](BT::NodeStatus status, bool was_cancelled,
                                               const std::string& message) {
       p_->tree.haltTree();
       action_result->node_status = ConvertNodeStatus(status);
       // override the message value if the user defined function returns it
-      if(auto msg = onTreeExecutionCompleted(status, true))
+      if(auto msg = onTreeExecutionCompleted(status, was_cancelled))
       {
         action_result->return_message = msg.value();
       }
@@ -229,7 +239,7 @@ void TreeExecutionServer::execute(
     {
       if(goal_handle->is_canceling())
       {
-        stop_action(status, "Action Server canceling and halting Behavior Tree");
+        stop_action(status, true, "Action Server canceling and halting Behavior Tree");
         goal_handle->canceled(action_result);
         return;
       }
@@ -239,7 +249,7 @@ void TreeExecutionServer::execute(
 
       if(const auto res = onLoopAfterTick(status); res.has_value())
       {
-        stop_action(res.value(), "Action Server aborted by onLoopAfterTick()");
+        stop_action(res.value(), false, "Action Server aborted by onLoopAfterTick()");
         goal_handle->abort(action_result);
         return;
       }
@@ -258,6 +268,12 @@ void TreeExecutionServer::execute(
             loop_deadline - now));
       }
       loop_deadline += period;
+    }
+
+    if(!rclcpp::ok() && status == BT::NodeStatus::RUNNING)
+    {
+      stop_action(status, false, "ROS shutdown detected while Behavior Tree was running");
+      return;
     }
   }
   catch(const std::exception& ex)
